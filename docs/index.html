@@ -1,0 +1,652 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Flujo final Geosupport - Imagenes PAO</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17232f;
+      --muted: #5b6773;
+      --line: #d9e1e8;
+      --panel: #f6f8fa;
+      --accent: #0b6f8f;
+      --accent-soft: #e7f4f8;
+      --warn: #8a5b00;
+      --warn-soft: #fff4db;
+      --ok: #1f7a4d;
+      --ok-soft: #e9f6ef;
+    }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Arial, sans-serif;
+      color: var(--ink);
+      background: #fff;
+      line-height: 1.55;
+    }
+    header {
+      background: #183544;
+      color: #fff;
+      padding: 28px 36px;
+    }
+    header h1 {
+      margin: 0 0 8px;
+      font-size: 28px;
+      font-weight: 650;
+    }
+    header p {
+      margin: 0;
+      max-width: 980px;
+      color: #d9edf4;
+    }
+    main {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 28px 28px 56px;
+    }
+    h2 {
+      margin: 34px 0 12px;
+      font-size: 22px;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 8px;
+    }
+    h3 {
+      margin: 24px 0 8px;
+      font-size: 18px;
+    }
+    code {
+      font-family: Consolas, "Courier New", monospace;
+      background: var(--panel);
+      padding: 2px 5px;
+      border-radius: 4px;
+    }
+    .stepper {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 12px;
+      margin: 22px 0 30px;
+    }
+    .step {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      background: var(--panel);
+    }
+    .step strong {
+      display: block;
+      color: var(--accent);
+      margin-bottom: 6px;
+    }
+    .step small {
+      display: block;
+      color: var(--muted);
+      margin-top: 8px;
+      font-size: 13px;
+    }
+    .flow {
+      display: grid;
+      gap: 14px;
+      margin: 18px 0 28px;
+    }
+    .flow-step {
+      display: grid;
+      grid-template-columns: 54px 1fr;
+      gap: 14px;
+      align-items: start;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      padding: 14px 16px;
+    }
+    .flow-number {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #fff;
+      display: grid;
+      place-items: center;
+      font-weight: 700;
+      font-size: 17px;
+    }
+    .flow-step h3 {
+      margin: 0 0 6px;
+    }
+    .flow-meta {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 10px;
+      font-size: 13px;
+    }
+    .flow-meta div {
+      background: var(--panel);
+      border-radius: 6px;
+      padding: 8px 10px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .box {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px 16px;
+      background: #fff;
+    }
+    .note {
+      border-left: 4px solid var(--accent);
+      background: var(--accent-soft);
+      padding: 12px 14px;
+      margin: 14px 0;
+    }
+    .warn {
+      border-left: 4px solid var(--warn);
+      background: var(--warn-soft);
+      padding: 12px 14px;
+      margin: 14px 0;
+    }
+    .ok {
+      border-left: 4px solid var(--ok);
+      background: var(--ok-soft);
+      padding: 12px 14px;
+      margin: 14px 0;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 20px;
+      font-size: 14px;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+      padding: 8px 10px;
+    }
+    th {
+      background: var(--panel);
+      font-weight: 650;
+    }
+    ul {
+      padding-left: 22px;
+    }
+    a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 600;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    @media (max-width: 900px) {
+      .stepper, .grid, .flow-meta {
+        grid-template-columns: 1fr;
+      }
+      .flow-step {
+        grid-template-columns: 1fr;
+      }
+      header, main {
+        padding-left: 18px;
+        padding-right: 18px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Flujo final Geosupport para imagenes drone PAO</h1>
+    <p>Proceso consolidado para normalizar imagenes, preparar rutas de datastore, cargar al mosaic dataset, actualizar atributos criticos y generar el MAPX de publicacion con rasters directos referidos al datastore.</p>
+  </header>
+
+  <main>
+    <section>
+      <h2>Resumen del flujo</h2>
+      <div class="stepper">
+        <div class="step"><strong>1. Normalizacion</strong>Preparar imagenes tecnicamente consistentes antes de cargarlas.<small>Salida: GeoTIFF RGB limpio en <code>normalizadas</code>.</small></div>
+        <div class="step"><strong>2. Preparacion de paths</strong>Resolver nombre oficial y ubicacion en datastore.<small>Salida: manifiesto <code>04_ready_for_datastore.csv</code>.</small></div>
+        <div class="step"><strong>3. Carga al mosaico</strong>Copiar, registrar, construir footprint y completar atributos.<small>Salida: registros validos en mosaic dataset.</small></div>
+        <div class="step"><strong>4. Footprints indice</strong>Exportar geometrias del mosaico a la GDB de indice y recalcular nombres.<small>Salida: capa de footprints sincronizada.</small></div>
+        <div class="step"><strong>5. MAPX</strong>Crear el mapa publicable desde los paths raster registrados en el mosaico.<small>Salida: MAPX ordenado con TIFF directos.</small></div>
+      </div>
+
+      <div class="note">
+        El flujo final esta pensado para trabajar con imagenes normalizadas antes de entrar al calculo de paths y a la carga al datastore. La carpeta <code>normalizadas</code> funciona como area de trabajo confiable; el nombre oficial de cada TIFF se define en la etapa de preparacion de paths. Las rutas y parametros principales se controlan desde <code>flujo_geosupport_final/settings.json</code>.
+      </div>
+    </section>
+
+    <section>
+      <h2>Logica general del proceso</h2>
+      <p>Este flujo no es una carga generica de rasters. Es un proceso personalizado para PAO, porque el nombre final, el directorio fisico, los atributos del mosaic dataset y el mapa de publicacion dependen de reglas de negocio y de datos espaciales.</p>
+      <div class="flow">
+        <div class="flow-step">
+          <div class="flow-number">1</div>
+          <div>
+            <h3>Normalizar primero para estabilizar la imagen</h3>
+            <p>Antes de copiar al datastore se corrigen los problemas tecnicos detectados en la entrega: bordes blancos o negros, imagenes colormap y lecturas inconsistentes de bandas. La salida queda lista para ArcGIS como RGB real de tres bandas.</p>
+            <div class="flow-meta">
+              <div><strong>Entrada</strong><br>TIFF originales del cliente.</div>
+              <div><strong>Regla</strong><br>Rasterio streaming y salida RGB.</div>
+              <div><strong>Control</strong><br>Revisar CSV de normalizacion.</div>
+            </div>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-number">2</div>
+          <div>
+            <h3>Calcular nombre y destino con datos confiables</h3>
+            <p>El nombre final no se toma directamente del texto original. La fecha viene del nombre o de <code>fechas.json</code>; el sector viene del cruce espacial. Con ambos datos se arma el nombre oficial y se determina la carpeta destino.</p>
+            <div class="flow-meta">
+              <div><strong>Entrada</strong><br>Folder <code>normalizadas</code>.</div>
+              <div><strong>Regla</strong><br><code>fecha + sector</code>.</div>
+              <div><strong>Control</strong><br>Solo pasan registros con path destino completo.</div>
+            </div>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-number">3</div>
+          <div>
+            <h3>Cargar al datastore y consolidar en el mosaic dataset</h3>
+            <p>El manifiesto aprobado es la fuente de verdad para copiar los archivos. Luego se agregan al mosaico, se construyen footprints y se actualizan campos criticos para que el visor, las consultas y las descargas funcionen de forma consistente.</p>
+            <div class="flow-meta">
+              <div><strong>Entrada</strong><br><code>04_ready_for_datastore.csv</code>.</div>
+              <div><strong>Regla</strong><br>Copiar, agregar raster, construir footprint, actualizar atributos.</div>
+              <div><strong>Control</strong><br>Validar resultados de carga y atributos.</div>
+            </div>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-number">4</div>
+          <div>
+            <h3>Sincronizar footprints en la GDB de indice</h3>
+            <p>Despues de cargar al mosaico, se exportan las geometrias footprint de las imagenes nuevas, se ajusta el mapeo de campos y se agregan a la capa historica de footprints en la GDB. Luego se recalcula <code>Nombre_de_Vuelo</code> con la numeracion esperada y se actualiza ese dato en el mosaic dataset.</p>
+            <div class="flow-meta">
+              <div><strong>Entrada</strong><br>Registros cargados correctamente.</div>
+              <div><strong>Regla</strong><br>Exportar footprint, mapear campos, append y recalcular.</div>
+              <div><strong>Control</strong><br>CSV de nombres agregados y actualizaciones.</div>
+            </div>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-number">5</div>
+          <div>
+            <h3>Publicar rasters directos usando el mosaico como inventario</h3>
+            <p>El MAPX se construye agregando los TIFF directos desde los paths registrados en el mosaic dataset. El mosaico se usa para identificar que imagenes existen, sus fechas y su path fisico; la capa final queda referida al archivo raster del datastore.</p>
+            <div class="flow-meta">
+              <div><strong>Entrada</strong><br>Mosaic dataset PAO + paths exportados.</div>
+              <div><strong>Regla</strong><br>Una capa raster directa por <code>RasterPath</code>.</div>
+              <div><strong>Control</strong><br>MAPX con grupo <code>Imagenes Drone</code> ordenado.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Directorio final</h2>
+      <table>
+        <thead>
+          <tr><th>Elemento</th><th>Uso</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>flujo_geosupport_final/settings.json</code></td><td>Archivo central de configuracion. Define carpeta de entrada, ambiente rasterio, mosaic dataset, datastore, feature class de footprints, APRX base y grupos del mapa.</td></tr>
+          <tr><td><code>flujo_geosupport_final/scripts/normalizar_rgb_streaming.py</code></td><td>Normaliza imagenes a RGB por bloques. Recibe una carpeta, busca TIFF recursivamente y escribe la salida en <code>normalizadas</code>.</td></tr>
+          <tr><td><code>flujo_geosupport_final/scripts/normalizar_rgb_streaming.bat</code></td><td>Lanzador Windows para ejecutar la normalizacion con el ambiente rasterio y mantener visible la consola.</td></tr>
+          <tr><td><code>flujo_geosupport_final/notebooks/01_normalizar_rgb_streaming.ipynb</code></td><td>Notebook de control de la etapa 01. Recibe el directorio de TIFF y ejecuta el script de normalizacion por subprocess en el ambiente rasterio.</td></tr>
+          <tr><td><code>flujo_geosupport_final/notebooks/02_preparar_paths_datastore.ipynb</code></td><td>Calcula fecha, sector, nombre oficial y path destino en datastore.</td></tr>
+          <tr><td><code>flujo_geosupport_final/notebooks/03_cargar_copias_normalizadas_mosaico.ipynb</code></td><td>Copia TIFF y archivos auxiliares al datastore, carga al mosaic dataset, construye footprints y actualiza atributos.</td></tr>
+          <tr><td><code>flujo_geosupport_final/notebooks/04_actualizar_footprints_indice.ipynb</code></td><td>Exporta footprints del mosaic dataset, los anexa al indice en GDB y sincroniza <code>Nombre_de_Vuelo</code>.</td></tr>
+          <tr><td><code>flujo_geosupport_final/notebooks/05_generar_mapx_mosaico_completo.ipynb</code></td><td>Genera el MAPX final agregando los TIFF directos obtenidos desde los paths registrados en el mosaic dataset.</td></tr>
+          <tr><td><code>flujo_geosupport_final/scripts/geosupport_flujo_completo.py</code></td><td>Funciones reutilizadas por los notebooks para preparar paths, cargar al mosaico, actualizar footprints y generar MAPX.</td></tr>
+          <tr><td><code>flujo_geosupport_final/json/fechas.json</code></td><td>Diccionario de fechas por nombre de archivo cuando la fecha no puede resolverse directamente desde el nombre.</td></tr>
+          <tr><td><code>flujo_geosupport_final/outputs</code></td><td>Salidas reemplazables por etapa: CSV de revision, manifiestos de carga, resultados y MAPX.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Entradas operacionales</h2>
+      <div class="grid">
+        <div class="box">
+          <h3>Carpeta de imagenes originales</h3>
+          <p>Es la carpeta de entrega del cliente. El flujo la recorre de forma recursiva y genera una subcarpeta <code>normalizadas</code> con los GeoTIFF que se usaran para el resto del proceso.</p>
+        </div>
+        <div class="box">
+          <h3>Fechas</h3>
+          <p>La fecha de adquisicion se intenta extraer primero desde el nombre del archivo usando patrones regex. Si el nombre no permite resolverla, se busca en <code>json/fechas.json</code>. Esa fecha participa directamente en el nombre de salida: <code>CL_MLP_PAO_IF_Ortho_yy_mm_dd_sector.tif</code>.</p>
+        </div>
+        <div class="box">
+          <h3>Feature class de sectores</h3>
+          <p>El sector no se infiere desde el nombre original. Se obtiene por cruce espacial contra la capa de indices/footprints configurada en el modulo del flujo.</p>
+        </div>
+        <div class="box">
+          <h3>Mosaic dataset y datastore</h3>
+          <p>El datastore recibe el TIFF final normalizado y sus archivos auxiliares asociados cuando existen. El mosaic dataset registra la imagen, construye el footprint y conserva los atributos que consumen los visores y servicios.</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Etapa 1: normalizacion RGB</h2>
+      <p>La normalizacion se ejecuta antes de preparar rutas. El objetivo es que todas las imagenes que entran al datastore sean GeoTIFF RGB de tres bandas, comprimidos, sin depender de una mascara de footprint externa.</p>
+      <p>Esta etapa se separo del resto porque fue el punto mas sensible del proceso. Las imagenes llegaban con distintas condiciones internas: algunas con fondo visible, otras como colormap, otras con archivos auxiliares que influian en la visualizacion. Por eso el flujo primero genera una version tecnicamente estable y despues continua con la logica GIS.</p>
+      <ul>
+        <li>Entrada: TIFF originales de la entrega.</li>
+        <li>Salida: carpeta <code>normalizadas</code> dentro de la carpeta de entrada.</li>
+        <li>Nombre de salida: se conserva como nombre operativo temporal. El nombre oficial se calcula despues con fecha y sector.</li>
+        <li>Metodo: lectura por ventanas con rasterio, conversion a RGB y limpieza de fondo por valores dominantes/bordes.</li>
+        <li>Compresion: GeoTIFF optimizado, sin perdida de resolucion.</li>
+      </ul>
+      <h3>Problemas encontrados y correccion aplicada</h3>
+      <table>
+        <thead>
+          <tr><th>Problema observado</th><th>Causa practica</th><th>Decision del flujo final</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Bordes negros o blancos visibles fuera de la imagen util.</td><td>Algunas imagenes traian valores de fondo en los bordes o archivos auxiliares/overviews que ArcGIS podia seguir mostrando.</td><td>Normalizar con rasterio streaming, detectar el fondo desde bordes/valores dominantes y generar un nuevo TIFF comprimido antes de cargar al datastore.</td></tr>
+          <tr><td>Imagenes colormap.</td><td>Se encontraron rasters definidos con colormap. En pantalla podian verse como imagen a color, pero internamente no eran RGB real de tres bandas.</td><td>Convertir la salida a GeoTIFF RGB explicito de 3 bandas, con bandas 1, 2 y 3 listas para Red, Green y Blue.</td></tr>
+          <tr><td>Imagenes que se veian diferente entre mosaic dataset y TIFF directo.</td><td>El mosaico podia aplicar su propia lectura/simbologia, mientras el TIFF directo exponia overviews o valores de fondo.</td><td>La normalizacion deja el TIFF directo estable para que pueda ser agregado al MAPX desde su path del datastore.</td></tr>
+          <tr><td>Procesamiento lento o consumo alto de memoria.</td><td>Algunos rasters son grandes y no conviene cargarlos completos.</td><td>El script procesa por ventanas o bloques, manteniendo la resolucion y reduciendo consumo de memoria.</td></tr>
+        </tbody>
+      </table>
+      <div class="warn">
+        Esta etapa no reemplaza directamente los archivos del datastore. Primero produce copias normalizadas y el resto del flujo usa esas copias como entrada confiable.
+      </div>
+      <h3>Como interpretar esta etapa</h3>
+      <table>
+        <thead>
+          <tr><th>Pregunta</th><th>Respuesta del flujo</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>De donde vienen las imagenes?</td><td>Desde la carpeta original de entrega del cliente.</td></tr>
+          <tr><td>Que cambia en esta etapa?</td><td>Solo la condicion tecnica del raster: bandas RGB, compresion y limpieza de fondo.</td></tr>
+          <tr><td>Que no se decide aqui?</td><td>No se decide el sector, el nombre oficial ni el directorio final del datastore.</td></tr>
+          <tr><td>Que revisar si falla?</td><td>Existencia del archivo, lectura con rasterio, valores de fondo, colormap y permisos de escritura en la carpeta <code>normalizadas</code>.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Etapa 2: preparacion de paths datastore</h2>
+      <p>El notebook lee la carpeta <code>normalizadas</code> y calcula el destino final de cada imagen. El nombre final se forma con dos componentes principales: fecha de adquisicion y sector espacial.</p>
+      <h3>De donde vienen los nombres</h3>
+      <p>El nombre final no depende del texto descriptivo original de la imagen. El flujo arma el nombre oficial con una estructura fija que permite ordenar, publicar y comparar contra el mosaic dataset:</p>
+      <p><code>CL_MLP_PAO_IF_Ortho_yy_mm_dd_sector.tif</code></p>
+      <ul>
+        <li><code>yy_mm_dd</code> viene primero de la fecha detectada con regex en el nombre del archivo. Si no se encuentra, se toma desde <code>json/fechas.json</code>.</li>
+        <li><code>sector</code> viene del cruce espacial de la imagen contra la capa de indices/sectores.</li>
+        <li>Si el nombre resultante se repite, se agrega una secuencia para evitar colisiones.</li>
+      </ul>
+      <h3>Nomenclatura del archivo objetivo</h3>
+      <table>
+        <thead>
+          <tr><th>Parte</th><th>Regla</th><th>Ejemplo</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Prefijo institucional</td><td>Siempre se usa <code>CL_MLP_PAO_IF_Ortho</code>.</td><td><code>CL_MLP_PAO_IF_Ortho</code></td></tr>
+          <tr><td>Fecha</td><td>Se expresa como <code>yy_mm_dd</code>. El flujo detecta patrones como <code>10-05-26</code>, <code>100526</code>, <code>20260510</code> o fechas parciales <code>23-05</code> asumiendo el año actual de ejecucion si corresponde.</td><td><code>26_05_10</code></td></tr>
+          <tr><td>Sector</td><td>Se toma del cruce espacial, preservando el nombre del sector del feature class. Los espacios se reemplazan por guion bajo; no se vuelve a inferir desde el nombre del archivo.</td><td><code>DME7_PA7_IF6</code></td></tr>
+          <tr><td>Extension</td><td>La salida oficial del datastore queda como GeoTIFF.</td><td><code>.tif</code></td></tr>
+          <tr><td>Duplicados</td><td>Si dos imagenes generan el mismo nombre oficial, se agrega sufijo secuencial <code>-1</code>, <code>-2</code>, etc. antes de la extension.</td><td><code>..._Subestacion-El-Mauro-1.tif</code></td></tr>
+        </tbody>
+      </table>
+      <h3>De donde vienen los directorios destino</h3>
+      <p>El directorio destino se resuelve despues de conocer el sector. Cada sector se mapea a una carpeta operacional del datastore, por ejemplo <code>Chacay_El_Mauro_Drone</code>, <code>El_Mauro_Drone</code>, <code>Chacay_Drone</code> o <code>Puerto_Punta_Chungo_Drone</code>. La ruta final combina:</p>
+      <p><code>datastore raiz / carpeta operacional / yy_mm / nombre oficial.tif</code></p>
+      <p>El folder mensual <code>yy_mm</code> se obtiene de los primeros cinco caracteres del token de fecha. Por ejemplo, una fecha <code>26_05_10</code> cae en el folder <code>26_05</code>.</p>
+      <h3>Ejemplo completo</h3>
+      <table>
+        <thead>
+          <tr><th>Elemento</th><th>Valor de ejemplo</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Archivo recibido</td><td><code>GEOSP-TRN-002790_GS_ORTOFOTO ED1_30-05-2026.tif</code></td></tr>
+          <tr><td>Fecha detectada por regex</td><td><code>30-05-2026</code> -> <code>26_05_30</code></td></tr>
+          <tr><td>Sector por cruce espacial</td><td><code>ED1</code></td></tr>
+          <tr><td>Nombre oficial</td><td><code>CL_MLP_PAO_IF_Ortho_26_05_30_ED1.tif</code></td></tr>
+          <tr><td>Folder operacional</td><td><code>Chacay_El_Mauro_Drone</code></td></tr>
+          <tr><td>Folder mensual</td><td><code>26_05</code></td></tr>
+          <tr><td>Path destino</td><td><code>\\amssclgis10.ams.gmams.cl\CL_MLP_PAO\Chacay_El_Mauro_Drone\26_05\CL_MLP_PAO_IF_Ortho_26_05_30_ED1.tif</code></td></tr>
+        </tbody>
+      </table>
+      <h3>Columnas del manifiesto de paths</h3>
+      <p>La etapa 2 genera tres salidas principales con la misma estructura de columnas: <code>03_manifest_paths_datastore.csv</code> contiene todo lo evaluado, <code>04_ready_for_datastore.csv</code> contiene lo que puede avanzar a carga y <code>05_review_required.csv</code> contiene lo que debe revisarse antes de copiar al datastore.</p>
+      <table>
+        <thead>
+          <tr><th>Columna</th><th>Que representa</th><th>Como se interpreta</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>ready_for_datastore</code></td><td>Indicador de que el registro esta listo para la siguiente etapa.</td><td>Debe ser verdadero para copiar/cargar. Si es falso, revisar <code>review_reason</code>.</td></tr>
+          <tr><td><code>review_reason</code></td><td>Motivo por el cual el registro no debe avanzar automaticamente.</td><td>Puede indicar problemas como <code>sin_fecha</code>, <code>sin_mapeo_datastore</code>, <code>sin_path_destino</code> o cruces espaciales que requieren revision.</td></tr>
+          <tr><td><code>path</code></td><td>Ruta de la imagen normalizada de entrada.</td><td>Es el archivo que se copiara al datastore si el registro esta listo.</td></tr>
+          <tr><td><code>relative_path</code></td><td>Ruta relativa de la imagen respecto al folder de entrada.</td><td>Sirve para auditoria y para ubicar rapidamente el archivo dentro de la entrega.</td></tr>
+          <tr><td><code>file_name</code></td><td>Nombre original del archivo dentro del folder procesado.</td><td>Se usa como llave de trazabilidad y para buscar fecha en regex o <code>fechas.json</code>.</td></tr>
+          <tr><td><code>expected_name</code></td><td>Nombre oficial sin extension.</td><td>Corresponde al valor que luego se usa como <code>Name</code> en el mosaic dataset.</td></tr>
+          <tr><td><code>expected_file_name</code></td><td>Nombre oficial con extension <code>.tif</code>.</td><td>Es el nombre final del archivo en el datastore.</td></tr>
+          <tr><td><code>original_expected_file_name</code></td><td>Nombre esperado antes de resolver duplicados.</td><td>Permite auditar si el flujo agrego sufijos <code>-1</code>, <code>-2</code>, etc.</td></tr>
+          <tr><td><code>expected_date_token</code></td><td>Fecha normalizada en formato <code>yy_mm_dd</code>.</td><td>Alimenta el nombre oficial y el folder mensual.</td></tr>
+          <tr><td><code>date_source</code></td><td>Origen de la fecha.</td><td>Puede venir de <code>file_name</code>, de una fecha con año asumido o del diccionario <code>date_dictionary</code>.</td></tr>
+          <tr><td><code>date_warning</code></td><td>Advertencia sobre la fecha detectada.</td><td>Por ejemplo, cuando el año fue asumido por no venir completo en el nombre.</td></tr>
+          <tr><td><code>destination_folder</code></td><td>Carpeta operacional del datastore.</td><td>Se obtiene desde el sector o desde excepciones por nombre de archivo.</td></tr>
+          <tr><td><code>destination_date_folder</code></td><td>Folder mensual <code>yy_mm</code>.</td><td>Se toma desde <code>expected_date_token</code>; por ejemplo <code>26_05_30</code> produce <code>26_05</code>.</td></tr>
+          <tr><td><code>destination_path</code></td><td>Ruta final completa en el datastore.</td><td>Es el destino fisico donde se copiara el TIFF normalizado.</td></tr>
+          <tr><td><code>expected_sector</code></td><td>Sector formateado para el nombre oficial.</td><td>Normalmente proviene del cruce espacial y se usa como ultimo token del nombre.</td></tr>
+          <tr><td><code>sector_source</code></td><td>Fuente usada para resolver el sector.</td><td>Indica si el sector vino del cruce espacial o de una excepcion controlada.</td></tr>
+          <tr><td><code>rename_status</code></td><td>Estado de construccion del nombre oficial.</td><td><code>ok</code> significa que la nomenclatura pudo construirse. Otros valores requieren revision.</td></tr>
+          <tr><td><code>spatial_status</code></td><td>Estado del cruce espacial.</td><td><code>ok</code> indica que se encontro sector. Otros estados indican ausencia de cruce o error.</td></tr>
+          <tr><td><code>spatial_query_source</code></td><td>Consulta del feature class que resolvio el cruce.</td><td>Distingue si el match vino del sensor principal, del sensor excluido usado como fallback o de una excepcion manual.</td></tr>
+          <tr><td><code>spatial_sector_raw</code></td><td>Sector tal como viene desde el feature class.</td><td>Se preserva para atributos y para trazabilidad del cruce espacial.</td></tr>
+          <tr><td><code>spatial_sector</code></td><td>Sector formateado para nombre.</td><td>Reemplaza espacios por guion bajo y mantiene el token esperado por la nomenclatura.</td></tr>
+          <tr><td><code>spatial_overlap_pct</code></td><td>Porcentaje de solape con el sector seleccionado.</td><td>Ayuda a validar casos donde la imagen cruza mas de un sector.</td></tr>
+          <tr><td><code>spatial_overlap_count</code></td><td>Cantidad de sectores intersectados.</td><td>Si es mayor que 1, conviene revisar el detalle de <code>spatial_all_matches</code>.</td></tr>
+          <tr><td><code>spatial_all_matches</code></td><td>Lista de sectores intersectados y su porcentaje.</td><td>Permite auditar por que se eligio el sector con mayor solape.</td></tr>
+          <tr><td><code>duplicate_expected_file_name</code></td><td>Indica si el nombre oficial se repitio.</td><td>Cuando es verdadero, revisar la secuencia aplicada.</td></tr>
+          <tr><td><code>duplicate_sequence</code></td><td>Numero asignado para resolver duplicados.</td><td>Genera sufijos como <code>-1</code>, <code>-2</code>, etc.</td></tr>
+          <tr><td><code>duplicate_was_resolved</code></td><td>Indica si el flujo ajusto el nombre por duplicado.</td><td>Debe revisarse para confirmar que los duplicados corresponden a imagenes distintas.</td></tr>
+          <tr><td><code>size_mb</code></td><td>Tamano del archivo de entrada.</td><td>Dato de control para auditoria.</td></tr>
+          <tr><td><code>modified_at</code></td><td>Fecha de modificacion del archivo de entrada.</td><td>Dato de control para auditoria.</td></tr>
+        </tbody>
+      </table>
+      <p>Desde <code>04_ready_for_datastore.csv</code> se deriva despues <code>01_load_input_with_attributes.csv</code>, donde <code>expected_name</code> pasa a ser <code>Name</code>, <code>expected_file_name</code> pasa a ser <code>Raster</code>, <code>destination_path</code> pasa a ser <code>Path_Destino</code> y se agregan los atributos que se escribiran en el mosaic dataset.</p>
+      <table>
+        <thead>
+          <tr><th>Componente</th><th>Origen</th><th>Uso</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Fecha</td><td>Regex sobre el nombre del archivo; si no resuelve, <code>fechas.json</code></td><td>Define el bloque <code>yy_mm_dd</code> del nombre final y el campo de adquisicion.</td></tr>
+          <tr><td>Sector</td><td>Cruce espacial con la capa de indices</td><td>Define el ultimo token del nombre y el folder destino del datastore.</td></tr>
+          <tr><td>Directorio destino</td><td>Diccionario sector/directorio</td><td>Ubica la imagen bajo la estructura operacional del datastore.</td></tr>
+          <tr><td>Secuencia</td><td>Resolucion de nombres repetidos</td><td>Cuando un nombre se repite, se agrega sufijo incremental para evitar sobreescrituras no deseadas.</td></tr>
+        </tbody>
+      </table>
+      <p>El resultado principal de esta etapa es <code>04_ready_for_datastore.csv</code>. Ese archivo contiene los registros listos para copiar y cargar al mosaic dataset. Los registros sin fecha, sin cruce espacial o sin mapeo de directorio quedan separados en archivos de revision.</p>
+      <div class="note">
+        Si una imagen no trae fecha reconocible por regex en el nombre, se espera que exista en <code>fechas.json</code>. Sin fecha no debe avanzar a carga porque el nombre final y la fecha de adquisicion quedan incompletos.
+      </div>
+      <h3>Como interpretar esta etapa</h3>
+      <table>
+        <thead>
+          <tr><th>Pregunta</th><th>Respuesta del flujo</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>De donde viene el nombre final?</td><td>De la fecha de adquisicion y del sector calculado espacialmente.</td></tr>
+          <tr><td>De donde viene el folder destino?</td><td>Del diccionario que relaciona sector con carpeta operacional del datastore.</td></tr>
+          <tr><td>Que pasa si falta fecha?</td><td>El registro queda para revision; se debe completar en <code>fechas.json</code> o corregir el nombre si se esperaba que el regex la detectara.</td></tr>
+          <tr><td>Que pasa si no cruza espacialmente?</td><td>Queda en revision, porque no se puede definir sector ni ruta final con confianza.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Etapa 3: carga al datastore y mosaic dataset</h2>
+      <p>Con el manifiesto ya definido, el flujo copia cada TIFF normalizado al path destino y luego lo registra en el mosaic dataset. La copia incluye el TIFF y los archivos auxiliares asociados generados o validados previamente por ArcGIS Pro, por ejemplo <code>.tif.ovr</code>, <code>.tif.aux.xml</code> y XML laterales cuando existan. Esta etapa tambien construye footprints y actualiza los campos criticos de negocio.</p>
+      <h3>Que usa como entrada</h3>
+      <p>La entrada de esta etapa es el manifiesto validado de la etapa 2. En ese manifiesto ya existe una relacion explicita entre:</p>
+      <ul>
+        <li>Path de la imagen normalizada de trabajo.</li>
+        <li>Path destino definitivo en el datastore.</li>
+        <li>Nombre oficial <code>Name</code> que debe existir en el mosaic dataset.</li>
+        <li>Sector y fecha de adquisicion que se usaran para atributos.</li>
+      </ul>
+      <h3>Actualizacion de campos en el mosaic dataset</h3>
+      <p>Despues de agregar el raster y construir su footprint, el flujo abre el registro del mosaic dataset por <code>Name</code> y actualiza los campos criticos con <code>arcpy.da.UpdateCursor</code>. Esta actualizacion es parte de la carga, no una revision posterior.</p>
+      <table>
+        <thead>
+          <tr><th>Campo</th><th>Valor aplicado</th><th>Origen / regla</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>Sector</code></td><td>Sector de la imagen.</td><td>Resultado del cruce espacial usado en la etapa de preparacion de paths.</td></tr>
+          <tr><td><code>FechaAdqui</code> / <code>Fecha_Adqu</code></td><td>Fecha de adquisicion.</td><td>Fecha resuelta por regex desde el nombre o, si no existe, desde <code>fechas.json</code>.</td></tr>
+          <tr><td><code>FechaCarga</code> / <code>Fecha_Publ</code></td><td>Fecha de publicacion/carga.</td><td>Fecha definida en el manifiesto de carga para la ejecucion.</td></tr>
+          <tr><td><code>Proyecto</code></td><td><code>PAO</code>.</td><td>Valor fijo del flujo.</td></tr>
+          <tr><td><code>Sensor</code></td><td><code>DJI Mavic Enterprise</code>.</td><td>Valor fijo del flujo para estas imagenes drone.</td></tr>
+          <tr><td><code>URL</code></td><td>URL de descarga/consulta.</td><td>Valor construido en la preparacion de atributos segun la logica PAO.</td></tr>
+          <tr><td><code>MinPS</code></td><td><code>0</code>.</td><td>Valor fijo solicitado para estandarizar la visualizacion.</td></tr>
+          <tr><td><code>LowPS</code></td><td><code>0.15</code>.</td><td>Valor fijo del flujo.</td></tr>
+          <tr><td><code>MaxPS</code></td><td><code>10000</code>.</td><td>Valor fijo del flujo.</td></tr>
+          <tr><td><code>ProductName</code> / <code>ProductNam</code></td><td>OBJECTID del registro del mosaic dataset.</td><td>Se calcula durante el update: para cada fila actualizada se toma el <code>OID@</code> del propio registro y se escribe como valor del campo.</td></tr>
+        </tbody>
+      </table>
+      <p>El update se ejecuta solamente sobre el registro cuyo <code>Name</code> coincide con la imagen cargada. Si alguno de los campos no existe en una version del mosaic dataset, el flujo lo reporta como campo faltante y actualiza los campos disponibles.</p>
+      <h3>Registro en el mosaic dataset</h3>
+      <p>La carga al mosaico se realiza con <code>arcpy.management.AddRastersToMosaicDataset</code>. La operacion agrega el TIFF normalizado que ya fue copiado al datastore y deja el registro disponible para construir footprint y actualizar atributos.</p>
+      <table>
+        <thead>
+          <tr><th>Parametro</th><th>Valor usado</th><th>Sentido operacional</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>raster_type</code></td><td><code>Raster Dataset</code></td><td>La entrada es un GeoTIFF individual.</td></tr>
+          <tr><td><code>update_cellsize_ranges</code></td><td><code>NO_CELL_SIZES</code></td><td>No recalcula rangos de celda globales durante cada insercion.</td></tr>
+          <tr><td><code>update_boundary</code></td><td><code>NO_BOUNDARY</code></td><td>El boundary global no se actualiza en esta llamada.</td></tr>
+          <tr><td><code>update_overviews</code></td><td><code>NO_OVERVIEWS</code></td><td>No reconstruye overviews en la carga unitaria.</td></tr>
+          <tr><td><code>minimum_dimension</code></td><td><code>1500</code></td><td>Parametro de lectura/carga para datasets raster.</td></tr>
+          <tr><td><code>sub_folder</code></td><td><code>NO_SUBFOLDERS</code></td><td>Se agrega el archivo indicado, no una busqueda recursiva.</td></tr>
+          <tr><td><code>duplicate_items_action</code></td><td><code>ALLOW_DUPLICATES</code></td><td>La prevencion principal de duplicados se controla por <code>Name</code> en el flujo.</td></tr>
+          <tr><td><code>build_pyramids</code></td><td><code>BUILD_PYRAMIDS</code></td><td>Construye piramides para lectura eficiente.</td></tr>
+          <tr><td><code>calculate_statistics</code></td><td><code>CALCULATE_STATISTICS</code></td><td>Calcula estadisticas para correcta visualizacion.</td></tr>
+          <tr><td><code>build_thumbnails</code></td><td><code>NO_THUMBNAILS</code></td><td>No genera miniaturas.</td></tr>
+          <tr><td><code>force_spatial_reference</code></td><td><code>NO_FORCE_SPATIAL_REFERENCE</code></td><td>Respeta la referencia del raster.</td></tr>
+          <tr><td><code>enable_pixel_cache</code></td><td><code>NO_PIXEL_CACHE</code></td><td>No habilita cache de pixeles en la operacion.</td></tr>
+        </tbody>
+      </table>
+      <h3>Construccion de footprint</h3>
+      <p>Luego del <code>AddRastersToMosaicDataset</code>, el flujo ejecuta <code>arcpy.management.BuildFootprints</code> filtrando por el <code>Name</code> de la imagen recien cargada.</p>
+      <table>
+        <thead>
+          <tr><th>Parametro</th><th>Valor usado</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Metodo</td><td><code>RADIOMETRY</code></td></tr>
+          <tr><td>Min / max region size</td><td><code>15</code> / <code>245</code></td></tr>
+          <tr><td>Smoothing</td><td><code>10000</code></td></tr>
+          <tr><td>Simplify</td><td><code>5</code></td></tr>
+          <tr><td>Maintain edges</td><td><code>NO_MAINTAIN_EDGES</code></td></tr>
+          <tr><td>Derived images</td><td><code>SKIP_DERIVED_IMAGES</code></td></tr>
+          <tr><td>Update boundary</td><td><code>UPDATE_BOUNDARY</code></td></tr>
+          <tr><td>Max vertices</td><td><code>2000</code></td></tr>
+          <tr><td>Max sliver size</td><td><code>100</code></td></tr>
+          <tr><td>Min thinness ratio</td><td><code>NONE</code></td></tr>
+          <tr><td>Shrink distance</td><td><code>20</code></td></tr>
+          <tr><td>Simplify tolerance</td><td><code>0.05</code></td></tr>
+        </tbody>
+      </table>
+      <div class="ok">
+        Al finalizar esta etapa, el mosaic dataset queda como inventario autoritativo de las imagenes cargadas y de sus paths raster. La carpeta datastore queda sincronizada con las rutas registradas en el mosaico.
+      </div>
+      <h3>Como interpretar esta etapa</h3>
+      <table>
+        <thead>
+          <tr><th>Pregunta</th><th>Respuesta del flujo</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Que archivo controla la carga?</td><td>El manifiesto aprobado de la etapa 2.</td></tr>
+          <tr><td>Que se escribe fisicamente?</td><td>El TIFF normalizado en su ruta final del datastore y sus sidecars asociados cuando existen.</td></tr>
+          <tr><td>Que se escribe en GIS?</td><td>El nuevo item del mosaic dataset, su footprint y sus atributos criticos.</td></tr>
+          <tr><td>Que valida que la carga quedo correcta?</td><td>Que el <code>Name</code> exista en el mosaic dataset, que tenga path raster asociado y que los campos criticos esten completos.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Etapa 4: actualizacion de footprints en GDB de indice</h2>
+      <p>Despues de cargar y construir los footprints en el mosaic dataset, el flujo replica esas geometrias hacia la capa de footprints/indice mantenida en la GDB corporativa. Esta parte existe para mantener sincronizada la capa historica que consume el visor y que contiene campos con nombres distintos a los del export del mosaico.</p>
+      <h3>Proceso aplicado</h3>
+      <table>
+        <thead>
+          <tr><th>Paso</th><th>Operacion</th><th>Resultado</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>1</td><td>Identificar imagenes cargadas correctamente en la etapa 3.</td><td>Lista de <code>Name</code> candidatos.</td></tr>
+          <tr><td>2</td><td>Comparar contra la capa destino <code>CL_MLP_PAO_Indice_Vuelos_PAO_IMGS_PO</code>.</td><td>Solo se preparan los nombres que aun no existen en la GDB.</td></tr>
+          <tr><td>3</td><td>Ejecutar <code>ExportMosaicDatasetGeometry</code> con <code>geometry_type = FOOTPRINT</code>.</td><td>Feature class temporal con las geometrias footprint exportadas desde el mosaic dataset.</td></tr>
+          <tr><td>4</td><td>Renombrar campos exportados para calzar con la capa historica.</td><td>Campos compatibles antes del append.</td></tr>
+          <tr><td>5</td><td>Ejecutar <code>Append</code> hacia la capa de footprints en GDB con <code>NO_TEST</code>.</td><td>Las nuevas geometrias quedan incorporadas al indice.</td></tr>
+          <tr><td>6</td><td>Recalcular <code>Nombre_de_Vuelo</code> ordenando por <code>Name ASC</code>.</td><td>Nombres de vuelo con formato secuencial.</td></tr>
+          <tr><td>7</td><td>Actualizar <code>NombreVuelo</code> en el mosaic dataset desde la capa de footprints.</td><td>Mosaico y GDB quedan sincronizados.</td></tr>
+        </tbody>
+      </table>
+      <h3>Mapeo de campos</h3>
+      <table>
+        <thead>
+          <tr><th>Campo exportado del mosaico</th><th>Campo esperado en GDB</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>FechaAdqui</code></td><td><code>Fecha_Adqu</code></td></tr>
+          <tr><td><code>FechaCarga</code></td><td><code>Fecha_Publ</code></td></tr>
+          <tr><td><code>NombreVuelo</code></td><td><code>Nombre_de_Vuelo</code></td></tr>
+          <tr><td><code>ProductName</code></td><td><code>ProductNam</code></td></tr>
+        </tbody>
+      </table>
+      <h3>Normalizacion adicional de datos</h3>
+      <p>La capa de footprints no solo recibe geometria. Tambien se recalcula <code>Nombre_de_Vuelo</code> para mantener la convencion historica:</p>
+      <p><code>numero_secuencial_yy_mm_dd_sector</code></p>
+      <p>El numero se asigna recorriendo la capa ordenada por <code>Name ASC</code>; la fecha sale de <code>Fecha_Adqu</code> y el sector de <code>Sector</code>. Luego ese valor se devuelve al campo <code>NombreVuelo</code> del mosaic dataset para que ambos repositorios queden alineados.</p>
+    </section>
+
+    <section>
+      <h2>Etapa 5: MAPX desde paths raster del mosaic dataset</h2>
+      <p>El MAPX se genera leyendo el mosaic dataset completo como inventario y exportando sus paths raster con <code>ExportMosaicDatasetPaths</code>. Luego cada imagen se agrega al mapa como TIFF directo, referido al path fisico del datastore.</p>
+      <h3>Por que se usa el mosaic dataset en esta etapa</h3>
+      <p>El mosaic dataset se usa como inventario de carga, no como capa final de visualizacion en el MAPX. Desde alli se obtiene que imagenes estan cargadas, su <code>Name</code>, su fecha y el <code>RasterPath</code> real. Con esa informacion se agregan las imagenes directas al grupo <code>Imagenes Drone</code> y se ordenan por fecha.</p>
+      <ul>
+        <li>Se excluyen los registros de overview cuyo <code>Name</code> comienza por <code>ov</code>.</li>
+        <li>Se exportan los paths reales de raster con <code>ExportMosaicDatasetPaths</code>.</li>
+        <li>Cada capa recibe un label limpio sin prefijo <code>CL_MLP_PAO_IF_Ortho_</code> ni extension <code>.tif</code>.</li>
+        <li>Las capas se agregan como rasters directos y se insertan en <code>Vuelos Drone PAO &gt; Imagenes Drone</code>.</li>
+        <li>El orden queda por fecha, de mas nueva a mas antigua.</li>
+        <li>La salida es solo MAPX; no se modifica el APRX original.</li>
+      </ul>
+      <h3>Como interpretar esta etapa</h3>
+      <table>
+        <thead>
+          <tr><th>Pregunta</th><th>Respuesta del flujo</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>De donde vienen las capas del MAPX?</td><td>De los paths raster exportados desde el mosaic dataset. Cada capa queda referida al TIFF del datastore.</td></tr>
+          <tr><td>Por que se consulta el mosaic dataset?</td><td>Porque alli esta el inventario consolidado: <code>Name</code>, fecha y path raster registrado.</td></tr>
+          <tr><td>Como se ordenan?</td><td>Por fecha, dejando las imagenes mas nuevas arriba.</td></tr>
+          <tr><td>Que se entrega al final?</td><td>Un archivo MAPX listo para usar en el proceso de publicacion.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Validaciones esperadas</h2>
+      <table>
+        <thead>
+          <tr><th>Revision</th><th>Resultado esperado</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Carpeta <code>normalizadas</code></td><td>Debe contener un TIFF normalizado por cada imagen original que se quiere procesar.</td></tr>
+          <tr><td><code>04_ready_for_datastore.csv</code></td><td>Debe contener solo imagenes con fecha, sector y path destino completo.</td></tr>
+          <tr><td>Archivos de revision</td><td>Idealmente vacios. Si tienen registros, revisar fecha, cruce espacial o mapeo de sector.</td></tr>
+          <tr><td>Mosaic dataset</td><td>Debe contener los nuevos registros con footprints y atributos criticos actualizados.</td></tr>
+          <tr><td>MAPX</td><td>Debe mostrar las capas raster directas dentro de <code>Imagenes Drone</code>, ordenadas por fecha y referidas a los paths del datastore.</td></tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+</body>
+</html>

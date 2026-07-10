@@ -2,6 +2,18 @@
 
 Repositorio limpio para ejecutar el flujo final de carga de imagenes drone PAO.
 
+## Estructura
+
+```text
+geosupport-flujo-imagenes/
+├── core/
+├── flujo_geosupport_final/
+├── docs/
+│   └── index.html
+├── .gitignore
+└── README.md
+```
+
 El flujo esta compilado en `flujo_geosupport_final/` y se ejecuta por etapas:
 
 1. `notebooks/01_normalizar_rgb_streaming.ipynb`
@@ -12,7 +24,17 @@ El flujo esta compilado en `flujo_geosupport_final/` y se ejecuta por etapas:
 
 Antes de ejecutar una entrega, ajustar `flujo_geosupport_final/settings.json`.
 
-La documentacion funcional esta en:
+La documentacion funcional para GitHub Pages esta en:
+
+`docs/index.html`
+
+En GitHub, activar Pages con:
+
+- Source: `Deploy from a branch`
+- Branch: `main`
+- Folder: `/docs`
+
+La copia fuente dentro del flujo queda en:
 
 `flujo_geosupport_final/documentacion/index.html`
 
