@@ -434,7 +434,7 @@ def prepare_paths_stage(input_folder: Path, output_dir: Path, date_json: Path | 
     if not review_df.empty:
         log_warning(f"Etapa 01 dejo {len(review_df)} imagenes para revision")
         log_dataframe(review_df[["file_name", "review_reason"]])
-    return {"ready_df": ready_df, "review_df": review_df, "manifest_df": manifest_df}
+    return {"summary_df": summary_df, "ready_df": ready_df, "review_df": review_df, "manifest_df": manifest_df}
 
 
 def build_url(destination_folder: str, destination_date_folder: str, expected_file_name: str) -> str:
