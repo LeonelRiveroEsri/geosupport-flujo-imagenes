@@ -237,7 +237,7 @@
           <div class="flow-number">2</div>
           <div>
             <h3>Calcular nombre y destino con datos confiables</h3>
-            <p>El nombre final no se toma directamente del texto original. La fecha viene del nombre o de <code>fechas.json</code>; el sector viene del cruce espacial. Con ambos datos se arma el nombre oficial y se determina la carpeta destino.</p>
+            <p>El nombre final no se toma directamente del texto original. La fecha viene primero de la tabla externa de fechas (<code>fechas.json</code> o Excel) y, si no existe alli, se extrae por regex desde el nombre; el sector viene del cruce espacial. Con ambos datos se arma el nombre oficial y se determina la carpeta destino.</p>
             <div class="flow-meta">
               <div><strong>Entrada</strong><br>Folder <code>normalizadas</code>.</div>
               <div><strong>Regla</strong><br><code>fecha + sector</code>.</div>
@@ -300,7 +300,7 @@
           <tr><td><code>flujo_geosupport_final/notebooks/04_actualizar_footprints_indice.ipynb</code></td><td>Exporta footprints del mosaic dataset, los anexa al indice en GDB y sincroniza <code>Nombre_de_Vuelo</code>.</td></tr>
           <tr><td><code>flujo_geosupport_final/notebooks/05_generar_mapx_mosaico_completo.ipynb</code></td><td>Genera el MAPX final agregando los TIFF directos obtenidos desde los paths registrados en el mosaic dataset.</td></tr>
           <tr><td><code>flujo_geosupport_final/scripts/geosupport_flujo_completo.py</code></td><td>Funciones reutilizadas por los notebooks para preparar paths, cargar al mosaico, actualizar footprints y generar MAPX.</td></tr>
-          <tr><td><code>flujo_geosupport_final/json/fechas.json</code></td><td>Diccionario de fechas por nombre de archivo cuando la fecha no puede resolverse directamente desde el nombre.</td></tr>
+          <tr><td><code>flujo_geosupport_final/json/fechas.json</code></td><td>Diccionario de fechas por nombre de archivo. Tiene prioridad sobre cualquier fecha detectada por regex en el nombre.</td></tr>
           <tr><td><code>flujo_geosupport_final/outputs</code></td><td>Salidas reemplazables por etapa: CSV de revision, manifiestos de carga, resultados y MAPX.</td></tr>
         </tbody>
       </table>
@@ -315,7 +315,7 @@
         </div>
         <div class="box">
           <h3>Fechas</h3>
-          <p>La fecha de adquisicion se intenta extraer primero desde el nombre del archivo usando patrones regex. Si el nombre no permite resolverla, se busca en <code>json/fechas.json</code>. Esa fecha participa directamente en el nombre de salida: <code>CL_MLP_PAO_IF_Ortho_yy_mm_dd_sector.tif</code>.</p>
+          <p>La fecha de adquisicion se resuelve primero desde la tabla externa de fechas (<code>json/fechas.json</code> o Excel). Si el archivo no aparece alli, se intenta extraer desde el nombre del archivo usando patrones regex. Esa fecha participa directamente en el nombre de salida: <code>CL_MLP_PAO_IF_Ortho_yy_mm_dd_sector.tif</code>.</p>
         </div>
         <div class="box">
           <h3>Feature class de sectores</h3>
@@ -375,7 +375,7 @@
       <p>El nombre final no depende del texto descriptivo original de la imagen. El flujo arma el nombre oficial con una estructura fija que permite ordenar, publicar y comparar contra el mosaic dataset:</p>
       <p><code>CL_MLP_PAO_IF_Ortho_yy_mm_dd_sector.tif</code></p>
       <ul>
-        <li><code>yy_mm_dd</code> viene primero de la fecha detectada con regex en el nombre del archivo. Si no se encuentra, se toma desde <code>json/fechas.json</code>.</li>
+        <li><code>yy_mm_dd</code> viene primero de <code>json/fechas.json</code> o del Excel de fechas. Si el archivo no esta en esas tablas, se calcula con regex sobre el nombre del archivo.</li>
         <li><code>sector</code> viene del cruce espacial de la imagen contra la capa de indices/sectores.</li>
         <li>Si el nombre resultante se repite, se agrega una secuencia para evitar colisiones.</li>
       </ul>
@@ -422,12 +422,12 @@
           <tr><td><code>review_reason</code></td><td>Motivo por el cual el registro no debe avanzar automaticamente.</td><td>Puede indicar problemas como <code>sin_fecha</code>, <code>sin_mapeo_datastore</code>, <code>sin_path_destino</code> o cruces espaciales que requieren revision.</td></tr>
           <tr><td><code>path</code></td><td>Ruta de la imagen normalizada de entrada.</td><td>Es el archivo que se copiara al datastore si el registro esta listo.</td></tr>
           <tr><td><code>relative_path</code></td><td>Ruta relativa de la imagen respecto al folder de entrada.</td><td>Sirve para auditoria y para ubicar rapidamente el archivo dentro de la entrega.</td></tr>
-          <tr><td><code>file_name</code></td><td>Nombre original del archivo dentro del folder procesado.</td><td>Se usa como llave de trazabilidad y para buscar fecha en regex o <code>fechas.json</code>.</td></tr>
+          <tr><td><code>file_name</code></td><td>Nombre original del archivo dentro del folder procesado.</td><td>Se usa como llave de trazabilidad y para buscar fecha primero en <code>fechas.json</code>/Excel; si no existe alli, se evalua por regex.</td></tr>
           <tr><td><code>expected_name</code></td><td>Nombre oficial sin extension.</td><td>Corresponde al valor que luego se usa como <code>Name</code> en el mosaic dataset.</td></tr>
           <tr><td><code>expected_file_name</code></td><td>Nombre oficial con extension <code>.tif</code>.</td><td>Es el nombre final del archivo en el datastore.</td></tr>
           <tr><td><code>original_expected_file_name</code></td><td>Nombre esperado antes de resolver duplicados.</td><td>Permite auditar si el flujo agrego sufijos <code>-1</code>, <code>-2</code>, etc.</td></tr>
           <tr><td><code>expected_date_token</code></td><td>Fecha normalizada en formato <code>yy_mm_dd</code>.</td><td>Alimenta el nombre oficial y el folder mensual.</td></tr>
-          <tr><td><code>date_source</code></td><td>Origen de la fecha.</td><td>Puede venir de <code>file_name</code>, de una fecha con año asumido o del diccionario <code>date_dictionary</code>.</td></tr>
+          <tr><td><code>date_source</code></td><td>Origen de la fecha.</td><td>Puede venir primero del diccionario de fechas (<code>date_dictionary</code>, cargado desde JSON/Excel), o bien de <code>file_name</code> cuando se usa regex.</td></tr>
           <tr><td><code>date_warning</code></td><td>Advertencia sobre la fecha detectada.</td><td>Por ejemplo, cuando el año fue asumido por no venir completo en el nombre.</td></tr>
           <tr><td><code>destination_folder</code></td><td>Carpeta operacional del datastore.</td><td>Se obtiene desde el sector o desde excepciones por nombre de archivo.</td></tr>
           <tr><td><code>destination_date_folder</code></td><td>Folder mensual <code>yy_mm</code>.</td><td>Se toma desde <code>expected_date_token</code>; por ejemplo <code>26_05_30</code> produce <code>26_05</code>.</td></tr>
@@ -455,7 +455,7 @@
           <tr><th>Componente</th><th>Origen</th><th>Uso</th></tr>
         </thead>
         <tbody>
-          <tr><td>Fecha</td><td>Regex sobre el nombre del archivo; si no resuelve, <code>fechas.json</code></td><td>Define el bloque <code>yy_mm_dd</code> del nombre final y el campo de adquisicion.</td></tr>
+          <tr><td>Fecha</td><td><code>fechas.json</code> o Excel; si no existe alli, regex sobre el nombre del archivo</td><td>Define el bloque <code>yy_mm_dd</code> del nombre final y el campo de adquisicion.</td></tr>
           <tr><td>Sector</td><td>Cruce espacial con la capa de indices</td><td>Define el ultimo token del nombre y el folder destino del datastore.</td></tr>
           <tr><td>Directorio destino</td><td>Diccionario sector/directorio</td><td>Ubica la imagen bajo la estructura operacional del datastore.</td></tr>
           <tr><td>Secuencia</td><td>Resolucion de nombres repetidos</td><td>Cuando un nombre se repite, se agrega sufijo incremental para evitar sobreescrituras no deseadas.</td></tr>
@@ -463,7 +463,7 @@
       </table>
       <p>El resultado principal de esta etapa es <code>04_ready_for_datastore.csv</code>. Ese archivo contiene los registros listos para copiar y cargar al mosaic dataset. Los registros sin fecha, sin cruce espacial o sin mapeo de directorio quedan separados en archivos de revision.</p>
       <div class="note">
-        Si una imagen no trae fecha reconocible por regex en el nombre, se espera que exista en <code>fechas.json</code>. Sin fecha no debe avanzar a carga porque el nombre final y la fecha de adquisicion quedan incompletos.
+        Si una imagen no esta en <code>fechas.json</code> o Excel, el flujo intenta resolver la fecha por regex en el nombre. Sin fecha no debe avanzar a carga porque el nombre final y la fecha de adquisicion quedan incompletos.
       </div>
       <h3>Como interpretar esta etapa</h3>
       <table>
@@ -473,7 +473,7 @@
         <tbody>
           <tr><td>De donde viene el nombre final?</td><td>De la fecha de adquisicion y del sector calculado espacialmente.</td></tr>
           <tr><td>De donde viene el folder destino?</td><td>Del diccionario que relaciona sector con carpeta operacional del datastore.</td></tr>
-          <tr><td>Que pasa si falta fecha?</td><td>El registro queda para revision; se debe completar en <code>fechas.json</code> o corregir el nombre si se esperaba que el regex la detectara.</td></tr>
+          <tr><td>Que pasa si falta fecha?</td><td>El registro queda para revision; se debe completar en <code>fechas.json</code>/Excel o corregir el nombre si se esperaba que el regex la detectara.</td></tr>
           <tr><td>Que pasa si no cruza espacialmente?</td><td>Queda en revision, porque no se puede definir sector ni ruta final con confianza.</td></tr>
         </tbody>
       </table>
@@ -498,7 +498,7 @@
         </thead>
         <tbody>
           <tr><td><code>Sector</code></td><td>Sector de la imagen.</td><td>Resultado del cruce espacial usado en la etapa de preparacion de paths.</td></tr>
-          <tr><td><code>FechaAdqui</code> / <code>Fecha_Adqu</code></td><td>Fecha de adquisicion.</td><td>Fecha resuelta por regex desde el nombre o, si no existe, desde <code>fechas.json</code>.</td></tr>
+          <tr><td><code>FechaAdqui</code> / <code>Fecha_Adqu</code></td><td>Fecha de adquisicion.</td><td>Fecha resuelta primero desde <code>fechas.json</code>/Excel y, si no existe alli, por regex desde el nombre.</td></tr>
           <tr><td><code>FechaCarga</code> / <code>Fecha_Publ</code></td><td>Fecha de publicacion/carga.</td><td>Fecha definida en el manifiesto de carga para la ejecucion.</td></tr>
           <tr><td><code>Proyecto</code></td><td><code>PAO</code>.</td><td>Valor fijo del flujo.</td></tr>
           <tr><td><code>Sensor</code></td><td><code>DJI Mavic Enterprise</code>.</td><td>Valor fijo del flujo para estas imagenes drone.</td></tr>
@@ -650,3 +650,4 @@
   </main>
 </body>
 </html>
+

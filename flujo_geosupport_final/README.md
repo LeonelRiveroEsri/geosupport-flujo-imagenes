@@ -21,7 +21,7 @@ Orden definitivo:
 
 2. `notebooks/02_preparar_paths_datastore.ipynb`
    - Lee la carpeta `normalizadas`.
-   - Extrae fecha por regex desde el nombre; si no existe, usa `json/fechas.json` o tabla de fechas.
+   - Resuelve la fecha primero desde `json/fechas.json` o Excel; si no existe alli, usa regex sobre el nombre del archivo.
    - Calcula sector por cruce espacial.
    - Define nombre oficial y path destino en el datastore.
 
@@ -43,3 +43,4 @@ Orden definitivo:
    - Normaliza etiquetas y ordena capas para publicacion.
 
 La documentacion funcional esta en `documentacion/index.html`.
+
