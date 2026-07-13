@@ -21,7 +21,7 @@ Orden definitivo:
 
 2. `notebooks/02_preparar_paths_datastore.ipynb`
    - Lee la carpeta `normalizadas`.
-   - Resuelve la fecha primero desde `json/fechas.json` o Excel; si no existe alli, usa regex sobre el nombre del archivo.
+   - Resuelve la fecha por ranking: primero `json/fechas.json` o Excel si existe registro; si no, regex sobre el nombre del archivo.
    - Calcula sector por cruce espacial.
    - Define nombre oficial y path destino en el datastore.
 
