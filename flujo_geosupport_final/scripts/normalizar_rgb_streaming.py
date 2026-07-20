@@ -391,6 +391,7 @@ def raster_artifacts(path: Path) -> list[Path]:
         path.with_name(f"{path.name}.msk"),
         path.with_name(f"{path.name}.aux.xml"),
         path.with_name(f"{path.name}.ovr"),
+        path.with_name(f"{path.name}.xml"),
     ]
 
 
@@ -589,6 +590,7 @@ def normalize_streaming(
                         compress="jpeg",
                         photometric="YCbCr",
                         jpeg_quality=int(quality),
+                        JPEGTABLESMODE=3,
                     )
                 else:
                     candidate_profile.update(
