@@ -596,21 +596,27 @@ def main() -> int:
     print(f"Salida: {'directorio unico ' + str(args.output_dir) if args.output_dir else 'subfolder ' + args.output_folder_name + ' junto al origen'}")
     for source, output in jobs:
         print(f"Normalizando streaming: {source} -> {output}", flush=True)
-        rows.append(
-            normalize_streaming(
-                source_path=source,
-                output_path=output,
-                background_values=background_values,
-                edge_size=args.edge_size,
-                tile_size=args.tile_size,
-            )
+        row = normalize_streaming(
+            source_path=source,
+            output_path=output,
+            background_values=background_values,
+            edge_size=args.edge_size,
+            tile_size=args.tile_size,
         )
+        rows.append(row)
+        if row.get("status") == "error":
+            print(f"ERROR normalizando: {source}", flush=True)
+            print(f"  {row.get('error')}", flush=True)
+        else:
+            print(f"OK normalizado: {output}", flush=True)
 
     report = report_dir / "normalizacion_streaming_resultados.csv"
     write_csv(report, rows)
     errors = [row for row in rows if row["status"] == "error"]
     print(f"CSV: {report}")
     print(f"Errores: {len(errors)}")
+    for row in errors[:20]:
+        print(f"- {row.get('source_path')}: {row.get('error')}", flush=True)
     return 1 if errors else 0
 
 
