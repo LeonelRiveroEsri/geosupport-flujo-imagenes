@@ -551,8 +551,31 @@ def build_jobs(sources: list[Path], output_dir: Path | None, output_folder_name:
     return jobs, report_dir
 
 
+def validate_rasterio_runtime() -> None:
+    try:
+        import rasterio
+    except Exception as exc:
+        env_prefix = Path(sys.prefix)
+        gdal_dll = env_prefix / "Library" / "bin" / "gdal.dll"
+        proj_dll = env_prefix / "Library" / "bin" / "proj_9.dll"
+        message = [
+            "No se pudo importar rasterio en el ambiente configurado.",
+            f"Python: {sys.executable}",
+            f"Prefix: {sys.prefix}",
+            f"gdal.dll existe: {gdal_dll.exists()} ({gdal_dll})",
+            f"proj_9.dll existe: {proj_dll.exists()} ({proj_dll})",
+            "Causa probable: mezcla o incompatibilidad de DLLs GDAL/PROJ/rasterio en el ambiente conda.",
+            "Recrear el ambiente rasterio con versiones fijadas antes de ejecutar la normalizacion.",
+            f"Error original: {type(exc).__name__}: {exc}",
+        ]
+        raise RuntimeError("\n".join(message)) from exc
+
+    print(f"Rasterio OK: {rasterio.__version__}")
+
+
 def main() -> int:
     args = parse_args()
+    validate_rasterio_runtime()
     background_values = parse_background_values(args.background_values)
     jobs, report_dir = build_jobs(args.sources, args.output_dir, args.output_folder_name)
     rows = []
