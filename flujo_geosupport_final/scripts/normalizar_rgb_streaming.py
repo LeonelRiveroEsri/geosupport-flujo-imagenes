@@ -417,6 +417,7 @@ def normalize_streaming(
     min_jpeg_quality: int = 60,
     masked_fill_value: int = 255,
     build_overviews: bool = False,
+    write_internal_mask: bool = True,
 ) -> dict[str, str]:
     import numpy as np
     import rasterio
@@ -440,6 +441,7 @@ def normalize_streaming(
         "size_status": "",
         "masked_fill_value": str(masked_fill_value),
         "overviews": "true" if build_overviews else "false",
+        "mask_mode": "internal" if write_internal_mask else "none",
         "error": "",
     }
 
@@ -510,7 +512,8 @@ def normalize_streaming(
 
             def write_candidate(candidate_profile: dict, candidate_quality: int | None) -> None:
                 cleanup_raster_artifacts(temp_output)
-                with rasterio.Env(GDAL_TIFF_INTERNAL_MASK="YES"):
+                mask_env = "YES" if write_internal_mask else "NO"
+                with rasterio.Env(GDAL_TIFF_INTERNAL_MASK=mask_env):
                     with rasterio.open(temp_output, "w", **candidate_profile) as dst:
                         for out_row in range(0, out_height, tile_size):
                             read_height = min(tile_size, out_height - out_row)
@@ -535,7 +538,8 @@ def normalize_streaming(
 
                                 rgb[:, alpha == 0] = int(masked_fill_value)
                                 dst.write(rgb, indexes=[1, 2, 3], window=write_window)
-                                dst.write_mask(alpha, window=write_window)
+                                if write_internal_mask:
+                                    dst.write_mask(alpha, window=write_window)
 
                         dst.colorinterp = (
                             rasterio.enums.ColorInterp.red,
@@ -643,6 +647,7 @@ def write_csv(path: Path, rows: list[dict[str, str]]) -> None:
         "size_status",
         "masked_fill_value",
         "overviews",
+        "mask_mode",
         "error",
     ]
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -707,6 +712,11 @@ def parse_args() -> argparse.Namespace:
         "--build-overviews",
         action="store_true",
         help="Construye overviews internas con rasterio despues de normalizar.",
+    )
+    parser.add_argument(
+        "--no-internal-mask",
+        action="store_true",
+        help="No escribe mascara interna. Recomendado para salidas que se usaran para crear TPK en ArcGIS Pro.",
     )
     return parser.parse_args()
 
@@ -794,6 +804,7 @@ def main() -> int:
             min_jpeg_quality=args.min_jpeg_quality,
             masked_fill_value=args.masked_fill_value,
             build_overviews=args.build_overviews,
+            write_internal_mask=not args.no_internal_mask,
         )
         rows.append(row)
         if row.get("status") == "error":
