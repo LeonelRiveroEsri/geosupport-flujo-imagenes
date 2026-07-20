@@ -390,6 +390,9 @@ def normalize_streaming(
     background_values: set[int] | None = None,
     edge_size: int = 512,
     tile_size: int = 512,
+    compression: str = "jpeg",
+    jpeg_quality: int = 85,
+    deflate_level: int = 6,
 ) -> dict[str, str]:
     import numpy as np
     import rasterio
@@ -406,6 +409,7 @@ def normalize_streaming(
         "bbox": "",
         "output_width": "",
         "output_height": "",
+        "compression": compression,
         "error": "",
     }
 
@@ -448,6 +452,13 @@ def normalize_streaming(
 
             src_window = Window(col_min, row_min, out_width, out_height)
             profile = src.profile.copy()
+            for key in ["colormap", "photometric", "nodata", "compress", "compression", "predictor", "zlevel", "jpeg_quality"]:
+                profile.pop(key, None)
+
+            compression = compression.lower().strip()
+            if compression not in {"jpeg", "deflate"}:
+                raise ValueError(f"Compresion no soportada: {compression}. Use jpeg o deflate.")
+
             profile.update(
                 driver="GTiff",
                 width=out_width,
@@ -458,14 +469,22 @@ def normalize_streaming(
                 tiled=True,
                 blockxsize=tile_size,
                 blockysize=tile_size,
-                compress="deflate",
-                zlevel=6,
-                predictor=2,
-                photometric="RGB",
                 BIGTIFF="IF_SAFER",
             )
-            for key in ["colormap", "photometric", "nodata"]:
-                profile.pop(key, None)
+
+            if compression == "jpeg":
+                profile.update(
+                    compress="jpeg",
+                    photometric="YCbCr",
+                    jpeg_quality=int(jpeg_quality),
+                )
+            else:
+                profile.update(
+                    compress="deflate",
+                    zlevel=int(deflate_level),
+                    predictor=2,
+                    photometric="RGB",
+                )
 
             lookup = rgb_lookup_from_colormap(src) if src.count == 1 else None
             background = np.array(sorted(background_values), dtype=src.dtypes[0]) if src.count == 1 else None
@@ -523,6 +542,7 @@ def write_csv(path: Path, rows: list[dict[str, str]]) -> None:
         "bbox",
         "output_width",
         "output_height",
+        "compression",
         "error",
     ]
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -540,7 +560,7 @@ def parse_background_values(value: str | None) -> set[int] | None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Normaliza TIFF RGB por streaming: paleta a RGB, fondo transparente, compresion DEFLATE y sin perdida de resolucion."
+        description="Normaliza TIFF RGB por streaming: paleta/colormap a RGB, fondo transparente, compresion optimizada y sin cambiar resolucion."
     )
     parser.add_argument(
         "sources",
@@ -558,6 +578,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--background-values", default=None, help="Valores de fondo separados por coma. Ejemplo: 252")
     parser.add_argument("--edge-size", type=int, default=512)
     parser.add_argument("--tile-size", type=int, default=512)
+    parser.add_argument(
+        "--compression",
+        choices=["jpeg", "deflate"],
+        default="jpeg",
+        help="Compresion de salida. jpeg reduce mucho el peso en ortofotos; deflate conserva compresion sin perdida pero puede aumentar tamano.",
+    )
+    parser.add_argument("--jpeg-quality", type=int, default=85, help="Calidad JPEG para --compression jpeg.")
+    parser.add_argument("--deflate-level", type=int, default=6, help="Nivel DEFLATE para --compression deflate.")
     return parser.parse_args()
 
 
@@ -637,6 +665,9 @@ def main() -> int:
             background_values=background_values,
             edge_size=args.edge_size,
             tile_size=args.tile_size,
+            compression=args.compression,
+            jpeg_quality=args.jpeg_quality,
+            deflate_level=args.deflate_level,
         )
         rows.append(row)
         if row.get("status") == "error":
