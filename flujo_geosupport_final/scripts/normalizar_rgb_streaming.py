@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import csv
 import os
+import shutil
 import sys
 from collections import Counter
 from pathlib import Path
@@ -384,6 +385,25 @@ def rgb_lookup_from_colormap(src):
     return lookup
 
 
+def raster_artifacts(path: Path) -> list[Path]:
+    return [
+        path,
+        path.with_name(f"{path.name}.msk"),
+        path.with_name(f"{path.name}.aux.xml"),
+        path.with_name(f"{path.name}.ovr"),
+    ]
+
+
+def raster_artifacts_size(path: Path) -> int:
+    return sum(artifact.stat().st_size for artifact in raster_artifacts(path) if artifact.exists())
+
+
+def cleanup_raster_artifacts(path: Path) -> None:
+    for artifact in raster_artifacts(path):
+        if artifact.exists():
+            artifact.unlink()
+
+
 def normalize_streaming(
     source_path: Path,
     output_path: Path,
@@ -393,6 +413,8 @@ def normalize_streaming(
     compression: str = "jpeg",
     jpeg_quality: int = 85,
     deflate_level: int = 6,
+    enforce_max_source_size: bool = True,
+    min_jpeg_quality: int = 60,
 ) -> dict[str, str]:
     import numpy as np
     import rasterio
@@ -410,12 +432,19 @@ def normalize_streaming(
         "output_width": "",
         "output_height": "",
         "compression": compression,
+        "source_bytes": "",
+        "output_bytes": "",
+        "jpeg_quality_used": "",
+        "size_status": "",
         "error": "",
     }
 
     try:
         if not source_path.exists():
             raise FileNotFoundError(f"No existe origen: {source_path}")
+
+        source_bytes = source_path.stat().st_size
+        row["source_bytes"] = str(source_bytes)
 
         with rasterio.open(source_path, sharing=False) as src:
             row["source_bands"] = str(src.count)
@@ -472,57 +501,107 @@ def normalize_streaming(
                 BIGTIFF="IF_SAFER",
             )
 
-            if compression == "jpeg":
-                profile.update(
-                    compress="jpeg",
-                    photometric="YCbCr",
-                    jpeg_quality=int(jpeg_quality),
-                )
-            else:
-                profile.update(
-                    compress="deflate",
-                    zlevel=int(deflate_level),
-                    predictor=2,
-                    photometric="RGB",
-                )
-
             lookup = rgb_lookup_from_colormap(src) if src.count == 1 else None
             background = np.array(sorted(background_values), dtype=src.dtypes[0]) if src.count == 1 else None
 
-            with rasterio.open(temp_output, "w", **profile) as dst:
-                for out_row in range(0, out_height, tile_size):
-                    read_height = min(tile_size, out_height - out_row)
-                    for out_col in range(0, out_width, tile_size):
-                        read_width = min(tile_size, out_width - out_col)
-                        read_window = Window(col_min + out_col, row_min + out_row, read_width, read_height)
-                        write_window = Window(out_col, out_row, read_width, read_height)
+            def write_candidate(candidate_profile: dict, candidate_quality: int | None) -> None:
+                cleanup_raster_artifacts(temp_output)
+                with rasterio.Env(GDAL_TIFF_INTERNAL_MASK=True):
+                    with rasterio.open(temp_output, "w", **candidate_profile) as dst:
+                        for out_row in range(0, out_height, tile_size):
+                            read_height = min(tile_size, out_height - out_row)
+                            for out_col in range(0, out_width, tile_size):
+                                read_width = min(tile_size, out_width - out_col)
+                                read_window = Window(col_min + out_col, row_min + out_row, read_width, read_height)
+                                write_window = Window(out_col, out_row, read_width, read_height)
 
-                        if src.count == 1:
-                            data = src.read(1, window=read_window)
-                            rgb = np.moveaxis(lookup[data], 2, 0)
-                            alpha = (~np.isin(data, background)).astype("uint8") * 255
-                        else:
-                            rgb = src.read([1, 2, 3], window=read_window)
-                            background_mask = background_mask_rgb(rgb, background_colors or set())
-                            if src.count >= 4:
-                                source_alpha = src.read(4, window=read_window) > 0
-                                valid_mask = (~background_mask) & source_alpha
-                            else:
-                                valid_mask = ~background_mask
-                            alpha = valid_mask.astype("uint8") * 255
+                                if src.count == 1:
+                                    data = src.read(1, window=read_window)
+                                    rgb = np.moveaxis(lookup[data], 2, 0)
+                                    alpha = (~np.isin(data, background)).astype("uint8") * 255
+                                else:
+                                    rgb = src.read([1, 2, 3], window=read_window)
+                                    background_mask = background_mask_rgb(rgb, background_colors or set())
+                                    if src.count >= 4:
+                                        source_alpha = src.read(4, window=read_window) > 0
+                                        valid_mask = (~background_mask) & source_alpha
+                                    else:
+                                        valid_mask = ~background_mask
+                                    alpha = valid_mask.astype("uint8") * 255
 
-                        rgb[:, alpha == 0] = 0
-                        dst.write(rgb, indexes=[1, 2, 3], window=write_window)
-                        dst.write_mask(alpha, window=write_window)
+                                rgb[:, alpha == 0] = 0
+                                dst.write(rgb, indexes=[1, 2, 3], window=write_window)
+                                dst.write_mask(alpha, window=write_window)
 
-                dst.colorinterp = (
-                    rasterio.enums.ColorInterp.red,
-                    rasterio.enums.ColorInterp.green,
-                    rasterio.enums.ColorInterp.blue,
-                )
+                        dst.colorinterp = (
+                            rasterio.enums.ColorInterp.red,
+                            rasterio.enums.ColorInterp.green,
+                            rasterio.enums.ColorInterp.blue,
+                        )
 
-            temp_output.replace(output_path)
-            row["status"] = "ok"
+            candidate_qualities = [int(jpeg_quality)]
+            for quality in [80, 75, 70, 65, int(min_jpeg_quality)]:
+                if int(min_jpeg_quality) <= quality <= int(jpeg_quality) and quality not in candidate_qualities:
+                    candidate_qualities.append(quality)
+
+            best_candidate = None
+            best_size = None
+            best_quality = None
+            attempts = candidate_qualities if compression == "jpeg" else [None]
+
+            for quality in attempts:
+                candidate_profile = profile.copy()
+                if compression == "jpeg":
+                    candidate_profile.update(
+                        compress="jpeg",
+                        photometric="YCbCr",
+                        jpeg_quality=int(quality),
+                    )
+                else:
+                    candidate_profile.update(
+                        compress="deflate",
+                        zlevel=int(deflate_level),
+                        predictor=2,
+                        photometric="RGB",
+                    )
+
+                write_candidate(candidate_profile, quality)
+                candidate_size = raster_artifacts_size(temp_output)
+                if best_size is None or candidate_size < best_size:
+                    best_candidate = temp_output.with_name(f"{temp_output.stem}.best{temp_output.suffix}")
+                    cleanup_raster_artifacts(best_candidate)
+                    temp_output.replace(best_candidate)
+                    temp_mask = temp_output.with_name(f"{temp_output.name}.msk")
+                    best_mask = best_candidate.with_name(f"{best_candidate.name}.msk")
+                    if temp_mask.exists():
+                        temp_mask.replace(best_mask)
+                    best_size = candidate_size
+                    best_quality = quality
+                else:
+                    cleanup_raster_artifacts(temp_output)
+
+                if not enforce_max_source_size or candidate_size <= source_bytes:
+                    break
+
+            cleanup_raster_artifacts(output_path)
+            if enforce_max_source_size and best_size is not None and best_size > source_bytes:
+                cleanup_raster_artifacts(best_candidate)
+                shutil.copy2(source_path, output_path)
+                row["status"] = "original_fallback_size_guard"
+                row["size_status"] = "kept_original_because_normalized_was_larger"
+                row["output_bytes"] = str(output_path.stat().st_size)
+            else:
+                best_candidate.replace(output_path)
+                best_mask = best_candidate.with_name(f"{best_candidate.name}.msk")
+                output_mask = output_path.with_name(f"{output_path.name}.msk")
+                if best_mask.exists():
+                    best_mask.replace(output_mask)
+                row["status"] = "ok"
+                row["size_status"] = "normalized_lte_source" if best_size <= source_bytes else "normalized_without_size_guard"
+                row["output_bytes"] = str(raster_artifacts_size(output_path))
+                row["jpeg_quality_used"] = "" if best_quality is None else str(best_quality)
+
+            cleanup_raster_artifacts(temp_output)
     except Exception as exc:
         row["status"] = "error"
         row["error"] = str(exc)
@@ -543,6 +622,10 @@ def write_csv(path: Path, rows: list[dict[str, str]]) -> None:
         "output_width",
         "output_height",
         "compression",
+        "source_bytes",
+        "output_bytes",
+        "jpeg_quality_used",
+        "size_status",
         "error",
     ]
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -586,6 +669,17 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--jpeg-quality", type=int, default=85, help="Calidad JPEG para --compression jpeg.")
     parser.add_argument("--deflate-level", type=int, default=6, help="Nivel DEFLATE para --compression deflate.")
+    parser.add_argument(
+        "--min-jpeg-quality",
+        type=int,
+        default=60,
+        help="Calidad JPEG minima a probar cuando el archivo normalizado queda mayor al origen.",
+    )
+    parser.add_argument(
+        "--allow-larger-output",
+        action="store_true",
+        help="Permite que la salida pese mas que el origen. Por defecto se evita.",
+    )
     return parser.parse_args()
 
 
@@ -668,6 +762,8 @@ def main() -> int:
             compression=args.compression,
             jpeg_quality=args.jpeg_quality,
             deflate_level=args.deflate_level,
+            enforce_max_source_size=not args.allow_larger_output,
+            min_jpeg_quality=args.min_jpeg_quality,
         )
         rows.append(row)
         if row.get("status") == "error":
