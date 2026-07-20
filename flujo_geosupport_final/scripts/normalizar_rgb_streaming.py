@@ -418,6 +418,7 @@ def normalize_streaming(
     masked_fill_value: int = 255,
     build_overviews: bool = False,
     write_internal_mask: bool = True,
+    output_layout: str = "tiled",
 ) -> dict[str, str]:
     import numpy as np
     import rasterio
@@ -442,6 +443,7 @@ def normalize_streaming(
         "masked_fill_value": str(masked_fill_value),
         "overviews": "true" if build_overviews else "false",
         "mask_mode": "internal" if write_internal_mask else "none",
+        "output_layout": output_layout,
         "error": "",
     }
 
@@ -494,6 +496,10 @@ def normalize_streaming(
             if compression not in {"jpeg", "deflate"}:
                 raise ValueError(f"Compresion no soportada: {compression}. Use jpeg o deflate.")
 
+            output_layout = output_layout.lower().strip()
+            if output_layout not in {"tiled", "stripped"}:
+                raise ValueError(f"Layout no soportado: {output_layout}. Use tiled o stripped.")
+
             profile.update(
                 driver="GTiff",
                 width=out_width,
@@ -501,11 +507,19 @@ def normalize_streaming(
                 count=3,
                 dtype="uint8",
                 transform=window_transform(src_window, src.transform),
-                tiled=True,
-                blockxsize=tile_size,
-                blockysize=tile_size,
                 BIGTIFF="IF_SAFER",
             )
+            if output_layout == "tiled":
+                profile.update(
+                    tiled=True,
+                    blockxsize=tile_size,
+                    blockysize=tile_size,
+                )
+            else:
+                profile.update(
+                    tiled=False,
+                    blockysize=src.block_shapes[0][0] if src.block_shapes else 32,
+                )
 
             lookup = rgb_lookup_from_colormap(src) if src.count == 1 else None
             background = np.array(sorted(background_values), dtype=src.dtypes[0]) if src.count == 1 else None
@@ -648,6 +662,7 @@ def write_csv(path: Path, rows: list[dict[str, str]]) -> None:
         "masked_fill_value",
         "overviews",
         "mask_mode",
+        "output_layout",
         "error",
     ]
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -718,6 +733,17 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="No escribe mascara interna. Recomendado para salidas que se usaran para crear TPK en ArcGIS Pro.",
     )
+    parser.add_argument(
+        "--output-layout",
+        choices=["tiled", "stripped"],
+        default="tiled",
+        help="Organizacion interna del GeoTIFF. stripped se parece mas a los TIFF originales y es mas compatible con TPK.",
+    )
+    parser.add_argument(
+        "--tpk-compatible",
+        action="store_true",
+        help="Modo de maxima compatibilidad con TPK: sin mascara interna, layout stripped y sin overviews internas.",
+    )
     return parser.parse_args()
 
 
@@ -786,6 +812,13 @@ def main() -> int:
     background_values = parse_background_values(args.background_values)
     jobs, report_dir = build_jobs(args.sources, args.output_dir, args.output_folder_name)
     rows = []
+    write_internal_mask = not args.no_internal_mask
+    output_layout = args.output_layout
+    build_overviews = args.build_overviews
+    if args.tpk_compatible:
+        write_internal_mask = False
+        output_layout = "stripped"
+        build_overviews = False
 
     print(f"Fuentes: {len(jobs)}")
     print(f"Salida: {'directorio unico ' + str(args.output_dir) if args.output_dir else 'subfolder ' + args.output_folder_name + ' junto al origen'}")
@@ -803,8 +836,9 @@ def main() -> int:
             enforce_max_source_size=not args.allow_larger_output,
             min_jpeg_quality=args.min_jpeg_quality,
             masked_fill_value=args.masked_fill_value,
-            build_overviews=args.build_overviews,
-            write_internal_mask=not args.no_internal_mask,
+            build_overviews=build_overviews,
+            write_internal_mask=write_internal_mask,
+            output_layout=output_layout,
         )
         rows.append(row)
         if row.get("status") == "error":
