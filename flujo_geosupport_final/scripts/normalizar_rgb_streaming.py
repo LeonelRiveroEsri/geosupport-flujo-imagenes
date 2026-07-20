@@ -209,12 +209,26 @@ def edge_windows(width: int, height: int, edge_size: int = 512):
     ]
 
 
+def sampled_edge_windows(width: int, height: int, edge_size: int = 512):
+    edge_size = max(1, min(edge_size, width, height))
+    col_positions = sorted({0, max(0, (width - edge_size) // 2), max(0, width - edge_size)})
+    row_positions = sorted({0, max(0, (height - edge_size) // 2), max(0, height - edge_size)})
+    windows = []
+    for col in col_positions:
+        windows.append(((0, edge_size), (col, col + edge_size)))
+        windows.append(((height - edge_size, height), (col, col + edge_size)))
+    for row in row_positions:
+        windows.append(((row, row + edge_size), (0, edge_size)))
+        windows.append(((row, row + edge_size), (width - edge_size, width)))
+    return windows
+
+
 def infer_background_values(src, edge_size: int = 512, min_ratio: float = 0.20) -> set[int]:
     import numpy as np
 
     counts: Counter[int] = Counter()
     total = 0
-    for window in edge_windows(src.width, src.height, edge_size=edge_size):
+    for window in sampled_edge_windows(src.width, src.height, edge_size=edge_size):
         data = src.read(1, window=window)
         values, value_counts = np.unique(data, return_counts=True)
         counts.update({int(value): int(count) for value, count in zip(values, value_counts)})
@@ -229,35 +243,89 @@ def infer_background_values(src, edge_size: int = 512, min_ratio: float = 0.20) 
     except Exception:
         cmap = {}
 
-    dominant_value, dominant_count = counts.most_common(1)[0]
-    background = {int(dominant_value)}
-
-    # Agrega valores muy frecuentes de borde que sean blanco/negro puro de paleta.
+    background = set()
     for value, count in counts.most_common(20):
         ratio = count / max(total, 1)
-        color = cmap.get(value)
         if ratio < min_ratio:
             continue
+        color = cmap.get(value)
         if color:
             r, g, b = color[:3]
-            is_near_white = r >= 245 and g >= 245 and b >= 245
-            is_near_black = r <= 10 and g <= 10 and b <= 10
-            if is_near_white or is_near_black:
-                background.add(int(value))
+        else:
+            r = g = b = int(value)
+
+        is_near_white = r >= 245 and g >= 245 and b >= 245
+        is_near_black = r <= 10 and g <= 10 and b <= 10
+        if is_near_white or is_near_black:
+            background.add(int(value))
 
     return background
 
 
-def find_valid_bbox(src, background_values: set[int]) -> tuple[int, int, int, int] | None:
+def read_rgb_edge_sample(src, window):
     import numpy as np
+
+    data = src.read([1, 2, 3], window=window)
+    return np.moveaxis(data, 0, 2).reshape(-1, 3)
+
+
+def background_mask_rgb(rgb, background_colors: set[tuple[int, int, int]]):
+    import numpy as np
+
+    if not background_colors:
+        return np.zeros((rgb.shape[1], rgb.shape[2]), dtype=bool)
+
+    background_mask = np.zeros((rgb.shape[1], rgb.shape[2]), dtype=bool)
+    for r, g, b in background_colors:
+        is_white = r >= 245 and g >= 245 and b >= 245
+        is_black = r <= 10 and g <= 10 and b <= 10
+        if is_white:
+            background_mask |= (rgb[0] >= 245) & (rgb[1] >= 245) & (rgb[2] >= 245)
+        elif is_black:
+            background_mask |= (rgb[0] <= 10) & (rgb[1] <= 10) & (rgb[2] <= 10)
+        else:
+            background_mask |= (rgb[0] == r) & (rgb[1] == g) & (rgb[2] == b)
+    return background_mask
+
+
+def infer_rgb_background_colors(src, edge_size: int = 512, min_ratio: float = 0.20) -> set[tuple[int, int, int]]:
+    import numpy as np
+
+    counts: Counter[tuple[int, int, int]] = Counter()
+    total = 0
+    for window in sampled_edge_windows(src.width, src.height, edge_size=edge_size):
+        rgb = read_rgb_edge_sample(src, window)
+        colors, color_counts = np.unique(rgb, axis=0, return_counts=True)
+        for color, count in zip(colors, color_counts):
+            counts.update({tuple(int(v) for v in color): int(count)})
+        total += int(rgb.shape[0])
+
+    if not counts:
+        raise ValueError("No se pudieron leer bordes RGB para inferir fondo.")
+
+    background = set()
+    for color, count in counts.most_common(50):
+        ratio = count / max(total, 1)
+        r, g, b = color
+        is_near_white = r >= 245 and g >= 245 and b >= 245
+        is_near_black = r <= 10 and g <= 10 and b <= 10
+        if ratio >= min_ratio and (is_near_white or is_near_black):
+            background.add(color)
+    return background
+
+
+def find_valid_bbox_rgb(src, background_colors: set[tuple[int, int, int]]) -> tuple[int, int, int, int] | None:
+    import numpy as np
+
+    if not background_colors:
+        return 0, 0, src.width - 1, src.height - 1
 
     col_min = row_min = None
     col_max = row_max = None
-    background = np.array(sorted(background_values), dtype=src.dtypes[0])
 
     for _, window in src.block_windows(1):
-        data = src.read(1, window=window)
-        valid = ~np.isin(data, background)
+        rgb = src.read([1, 2, 3], window=window)
+        valid = ~background_mask_rgb(rgb, background_colors)
         if not valid.any():
             continue
         rows, cols = np.where(valid)
@@ -275,46 +343,16 @@ def find_valid_bbox(src, background_values: set[int]) -> tuple[int, int, int, in
     return int(col_min), int(row_min), int(col_max), int(row_max)
 
 
-def infer_rgb_background_colors(src, edge_size: int = 512, min_ratio: float = 0.20) -> set[tuple[int, int, int]]:
-    import numpy as np
-
-    counts: Counter[tuple[int, int, int]] = Counter()
-    total = 0
-    for window in edge_windows(src.width, src.height, edge_size=edge_size):
-        data = src.read([1, 2, 3], window=window)
-        rgb = np.moveaxis(data, 0, 2).reshape(-1, 3)
-        colors, color_counts = np.unique(rgb, axis=0, return_counts=True)
-        for color, count in zip(colors, color_counts):
-            counts.update({tuple(int(v) for v in color): int(count)})
-        total += int(rgb.shape[0])
-
-    if not counts:
-        raise ValueError("No se pudieron leer bordes RGB para inferir fondo.")
-
-    background = {counts.most_common(1)[0][0]}
-    for color, count in counts.most_common(20):
-        ratio = count / max(total, 1)
-        r, g, b = color
-        is_near_white = r >= 245 and g >= 245 and b >= 245
-        is_near_black = r <= 10 and g <= 10 and b <= 10
-        if ratio >= min_ratio and (is_near_white or is_near_black):
-            background.add(color)
-    return background
-
-
-def find_valid_bbox_rgb(src, background_colors: set[tuple[int, int, int]]) -> tuple[int, int, int, int] | None:
+def find_valid_bbox(src, background_values: set[int]) -> tuple[int, int, int, int] | None:
     import numpy as np
 
     col_min = row_min = None
     col_max = row_max = None
-    colors = list(background_colors)
+    background = np.array(sorted(background_values), dtype=src.dtypes[0])
 
     for _, window in src.block_windows(1):
-        rgb = src.read([1, 2, 3], window=window)
-        background_mask = np.zeros((rgb.shape[1], rgb.shape[2]), dtype=bool)
-        for r, g, b in colors:
-            background_mask |= (rgb[0] == r) & (rgb[1] == g) & (rgb[2] == b)
-        valid = ~background_mask
+        data = src.read(1, window=window)
+        valid = ~np.isin(data, background)
         if not valid.any():
             continue
         rows, cols = np.where(valid)
@@ -424,10 +462,9 @@ def normalize_streaming(
                 zlevel=6,
                 predictor=2,
                 photometric="RGB",
-                nodata=0,
                 BIGTIFF="IF_SAFER",
             )
-            for key in ["colormap", "photometric"]:
+            for key in ["colormap", "photometric", "nodata"]:
                 profile.pop(key, None)
 
             lookup = rgb_lookup_from_colormap(src) if src.count == 1 else None
@@ -447,9 +484,7 @@ def normalize_streaming(
                             alpha = (~np.isin(data, background)).astype("uint8") * 255
                         else:
                             rgb = src.read([1, 2, 3], window=read_window)
-                            background_mask = np.zeros((read_height, read_width), dtype=bool)
-                            for r, g, b in background_colors or set():
-                                background_mask |= (rgb[0] == r) & (rgb[1] == g) & (rgb[2] == b)
+                            background_mask = background_mask_rgb(rgb, background_colors or set())
                             if src.count >= 4:
                                 source_alpha = src.read(4, window=read_window) > 0
                                 valid_mask = (~background_mask) & source_alpha
