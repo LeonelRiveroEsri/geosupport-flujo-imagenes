@@ -21,5 +21,6 @@
   "overwrite_datastore_copy_default": true,
   "background_values": null,
   "edge_size": 512,
-  "tile_size": 512
+  "tile_size": 512,
+  "tpk_compatible": true
 }

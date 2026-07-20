@@ -54,7 +54,7 @@ if "%~1"=="" (
     goto FIN
 )
 
-set "EXTRA_ARGS=%*"
+set "EXTRA_ARGS=%* --tpk-compatible"
 
 pushd "%PROJECT_ROOT%"
 echo Opciones: %EXTRA_ARGS%
