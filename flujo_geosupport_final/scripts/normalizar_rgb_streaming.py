@@ -32,7 +32,7 @@ def configure_rasterio_env() -> None:
     }.items():
         candidate = env_prefix.joinpath(*relative)
         if candidate.exists():
-            os.environ.setdefault(key, str(candidate))
+            os.environ[key] = str(candidate)
 
     for candidate in dll_candidates:
         if candidate.exists() and hasattr(os, "add_dll_directory"):

@@ -15,6 +15,14 @@ if exist "%RASTERIO_ENV_LOCAL%\python.exe" (
 ) else (
     set "RASTERIO_PYTHON=%RASTERIO_ENV_SERVER%\python.exe"
 )
+for %%I in ("%RASTERIO_PYTHON%") do set "RASTERIO_PREFIX=%%~dpI"
+set "PATH=%RASTERIO_PREFIX%Library\bin;%RASTERIO_PREFIX%Scripts;%RASTERIO_PREFIX%DLLs;%RASTERIO_PREFIX%;%PATH%"
+set "GDAL_DATA=%RASTERIO_PREFIX%Library\share\gdal"
+set "PROJ_LIB=%RASTERIO_PREFIX%Library\share\proj"
+set "PYTHONPATH="
+set "PYTHONHOME="
+set "GDAL_DRIVER_PATH="
+set "CONDA_DLL_SEARCH_MODIFICATION_ENABLE=1"
 
 echo ============================================================ > "%BAT_LOG%"
 echo Inicio BAT: %DATE% %TIME% >> "%BAT_LOG%"
