@@ -2,7 +2,7 @@
 setlocal
 
 set "SCRIPT_DIR=%~dp0"
-set "PROJECT_ROOT=%SCRIPT_DIR%.."
+for %%I in ("%SCRIPT_DIR%..\..") do set "PROJECT_ROOT=%%~fI"
 set "SCRIPT_PATH=%SCRIPT_DIR%normalizar_rgb_streaming.py"
 set "RASTERIO_ENV_LOCAL=D:\Env\geo-raster-py311"
 set "RASTERIO_ENV_SERVER=C:\Users\esrlrivero_adm\AppData\Local\ESRI\conda\envs\geo-raster-py311"
