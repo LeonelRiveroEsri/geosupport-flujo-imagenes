@@ -13,6 +13,19 @@ _DLL_DIRECTORY_HANDLES = []
 
 def configure_rasterio_env() -> None:
     env_prefix = Path(sys.prefix)
+    dll_candidates = [
+        env_prefix / "Library" / "bin",
+        env_prefix / "Scripts",
+        env_prefix / "DLLs",
+        env_prefix,
+    ]
+
+    # El notebook se ejecuta desde ArcGIS Pro y el subproceso puede heredar DLLs
+    # de ArcGIS en PATH. Rasterio debe resolver primero las DLL de su ambiente.
+    current_path = os.environ.get("PATH", "")
+    path_parts = [str(path) for path in dll_candidates if path.exists()]
+    os.environ["PATH"] = os.pathsep.join(path_parts + [current_path])
+
     for key, relative in {
         "GDAL_DATA": ("Library", "share", "gdal"),
         "PROJ_LIB": ("Library", "share", "proj"),
@@ -21,8 +34,7 @@ def configure_rasterio_env() -> None:
         if candidate.exists():
             os.environ.setdefault(key, str(candidate))
 
-    for relative in [("Library", "bin"), ("DLLs",), ()]:
-        candidate = env_prefix.joinpath(*relative)
+    for candidate in dll_candidates:
         if candidate.exists() and hasattr(os, "add_dll_directory"):
             _DLL_DIRECTORY_HANDLES.append(os.add_dll_directory(str(candidate)))
 
@@ -557,13 +569,13 @@ def validate_rasterio_runtime() -> None:
     except Exception as exc:
         env_prefix = Path(sys.prefix)
         gdal_dll = env_prefix / "Library" / "bin" / "gdal.dll"
-        proj_dll = env_prefix / "Library" / "bin" / "proj_9.dll"
+        proj_dlls = sorted((env_prefix / "Library" / "bin").glob("proj*.dll"))
         message = [
             "No se pudo importar rasterio en el ambiente configurado.",
             f"Python: {sys.executable}",
             f"Prefix: {sys.prefix}",
             f"gdal.dll existe: {gdal_dll.exists()} ({gdal_dll})",
-            f"proj_9.dll existe: {proj_dll.exists()} ({proj_dll})",
+            "proj dlls: " + (", ".join(path.name for path in proj_dlls) if proj_dlls else "no encontradas"),
             "Causa probable: mezcla o incompatibilidad de DLLs GDAL/PROJ/rasterio en el ambiente conda.",
             "Recrear el ambiente rasterio con versiones fijadas antes de ejecutar la normalizacion.",
             f"Error original: {type(exc).__name__}: {exc}",
