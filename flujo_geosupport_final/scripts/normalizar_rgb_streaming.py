@@ -415,6 +415,8 @@ def normalize_streaming(
     deflate_level: int = 6,
     enforce_max_source_size: bool = True,
     min_jpeg_quality: int = 60,
+    masked_fill_value: int = 255,
+    build_overviews: bool = False,
 ) -> dict[str, str]:
     import numpy as np
     import rasterio
@@ -436,6 +438,8 @@ def normalize_streaming(
         "output_bytes": "",
         "jpeg_quality_used": "",
         "size_status": "",
+        "masked_fill_value": str(masked_fill_value),
+        "overviews": "true" if build_overviews else "false",
         "error": "",
     }
 
@@ -506,7 +510,7 @@ def normalize_streaming(
 
             def write_candidate(candidate_profile: dict, candidate_quality: int | None) -> None:
                 cleanup_raster_artifacts(temp_output)
-                with rasterio.Env(GDAL_TIFF_INTERNAL_MASK=True):
+                with rasterio.Env(GDAL_TIFF_INTERNAL_MASK="YES"):
                     with rasterio.open(temp_output, "w", **candidate_profile) as dst:
                         for out_row in range(0, out_height, tile_size):
                             read_height = min(tile_size, out_height - out_row)
@@ -529,7 +533,7 @@ def normalize_streaming(
                                         valid_mask = ~background_mask
                                     alpha = valid_mask.astype("uint8") * 255
 
-                                rgb[:, alpha == 0] = 0
+                                rgb[:, alpha == 0] = int(masked_fill_value)
                                 dst.write(rgb, indexes=[1, 2, 3], window=write_window)
                                 dst.write_mask(alpha, window=write_window)
 
@@ -538,6 +542,17 @@ def normalize_streaming(
                             rasterio.enums.ColorInterp.green,
                             rasterio.enums.ColorInterp.blue,
                         )
+
+                if build_overviews:
+                    from rasterio.enums import Resampling
+
+                    with rasterio.Env(GDAL_TIFF_INTERNAL_MASK="YES"):
+                        with rasterio.open(temp_output, "r+") as overview_dst:
+                            factors = [2, 4, 8, 16, 32]
+                            factors = [factor for factor in factors if overview_dst.width // factor >= 256 and overview_dst.height // factor >= 256]
+                            if factors:
+                                overview_dst.build_overviews(factors, Resampling.average)
+                                overview_dst.update_tags(ns="rio_overview", resampling="average")
 
             candidate_qualities = [int(jpeg_quality)]
             for quality in [80, 75, 70, 65, int(min_jpeg_quality)]:
@@ -626,6 +641,8 @@ def write_csv(path: Path, rows: list[dict[str, str]]) -> None:
         "output_bytes",
         "jpeg_quality_used",
         "size_status",
+        "masked_fill_value",
+        "overviews",
         "error",
     ]
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -679,6 +696,17 @@ def parse_args() -> argparse.Namespace:
         "--allow-larger-output",
         action="store_true",
         help="Permite que la salida pese mas que el origen. Por defecto se evita.",
+    )
+    parser.add_argument(
+        "--masked-fill-value",
+        type=int,
+        default=255,
+        help="Valor RGB fisico usado fuera de la mascara. 255 evita bordes negros si ArcGIS recalcula piramides.",
+    )
+    parser.add_argument(
+        "--build-overviews",
+        action="store_true",
+        help="Construye overviews internas con rasterio despues de normalizar.",
     )
     return parser.parse_args()
 
@@ -764,6 +792,8 @@ def main() -> int:
             deflate_level=args.deflate_level,
             enforce_max_source_size=not args.allow_larger_output,
             min_jpeg_quality=args.min_jpeg_quality,
+            masked_fill_value=args.masked_fill_value,
+            build_overviews=args.build_overviews,
         )
         rows.append(row)
         if row.get("status") == "error":
