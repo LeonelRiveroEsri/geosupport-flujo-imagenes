@@ -420,6 +420,7 @@ def normalize_streaming(
     build_overviews: bool = False,
     write_internal_mask: bool = True,
     output_layout: str = "tiled",
+    write_nodata: bool = False,
 ) -> dict[str, str]:
     import numpy as np
     import rasterio
@@ -445,6 +446,7 @@ def normalize_streaming(
         "overviews": "true" if build_overviews else "false",
         "mask_mode": "internal" if write_internal_mask else "none",
         "output_layout": output_layout,
+        "nodata_mode": "value" if write_nodata else "none",
         "error": "",
     }
 
@@ -510,6 +512,8 @@ def normalize_streaming(
                 transform=window_transform(src_window, src.transform),
                 BIGTIFF="IF_SAFER",
             )
+            if write_nodata:
+                profile.update(nodata=int(masked_fill_value))
             if output_layout == "tiled":
                 profile.update(
                     tiled=True,
@@ -665,6 +669,7 @@ def write_csv(path: Path, rows: list[dict[str, str]]) -> None:
         "overviews",
         "mask_mode",
         "output_layout",
+        "nodata_mode",
         "error",
     ]
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -744,7 +749,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--tpk-compatible",
         action="store_true",
-        help="Modo de maxima compatibilidad con TPK: sin mascara interna, layout stripped y sin overviews internas.",
+        help="Modo de maxima compatibilidad con TPK: sin mascara interna, layout stripped, NoData=valor de fondo y sin overviews internas.",
+    )
+    parser.add_argument(
+        "--no-nodata",
+        action="store_true",
+        help="No escribe NoData en la salida. Usar solo si el consumidor no soporta NoData en RGB.",
     )
     return parser.parse_args()
 
@@ -817,10 +827,14 @@ def main() -> int:
     write_internal_mask = not args.no_internal_mask
     output_layout = args.output_layout
     build_overviews = args.build_overviews
+    write_nodata = False
     if args.tpk_compatible:
         write_internal_mask = False
         output_layout = "stripped"
         build_overviews = False
+        write_nodata = True
+    if args.no_nodata:
+        write_nodata = False
 
     print(f"Fuentes: {len(jobs)}")
     print(f"Salida: {'directorio unico ' + str(args.output_dir) if args.output_dir else 'subfolder ' + args.output_folder_name + ' junto al origen'}")
@@ -841,6 +855,7 @@ def main() -> int:
             build_overviews=build_overviews,
             write_internal_mask=write_internal_mask,
             output_layout=output_layout,
+            write_nodata=write_nodata,
         )
         rows.append(row)
         if row.get("status") == "error":
