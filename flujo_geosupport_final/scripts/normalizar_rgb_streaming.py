@@ -429,6 +429,7 @@ def normalize_streaming(
     write_internal_mask: bool = True,
     output_layout: str = "tiled",
     write_nodata: bool = False,
+    skip_bbox_scan: bool = False,
 ) -> dict[str, str]:
     import numpy as np
     import rasterio
@@ -455,6 +456,7 @@ def normalize_streaming(
         "mask_mode": "internal" if write_internal_mask else "none",
         "output_layout": output_layout,
         "nodata_mode": "value" if write_nodata else "none",
+        "bbox_mode": "full_extent" if skip_bbox_scan else "scan",
         "error": "",
     }
 
@@ -478,11 +480,11 @@ def normalize_streaming(
                 if background_values is None:
                     background_values = infer_background_values(src, edge_size=edge_size)
                 row["background_values"] = "|".join(str(v) for v in sorted(background_values))
-                bbox = find_valid_bbox(src, background_values)
+                bbox = (0, 0, src.width - 1, src.height - 1) if skip_bbox_scan else find_valid_bbox(src, background_values)
             else:
                 background_colors = infer_rgb_background_colors(src, edge_size=edge_size)
                 row["background_values"] = "|".join(",".join(str(v) for v in color) for color in sorted(background_colors))
-                bbox = find_valid_bbox_rgb(src, background_colors)
+                bbox = (0, 0, src.width - 1, src.height - 1) if skip_bbox_scan else find_valid_bbox_rgb(src, background_colors)
             if bbox is None:
                 raise ValueError("No se encontraron pixeles validos despues de remover fondo.")
             col_min, row_min, col_max, row_max = bbox
@@ -692,6 +694,7 @@ def write_csv(path: Path, rows: list[dict[str, str]]) -> None:
         "mask_mode",
         "output_layout",
         "nodata_mode",
+        "bbox_mode",
         "error",
     ]
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -778,6 +781,16 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="No escribe NoData en la salida. Usar solo si el consumidor no soporta NoData en RGB.",
     )
+    parser.add_argument(
+        "--skip-bbox-scan",
+        action="store_true",
+        help="Evita el barrido completo para calcular recorte y conserva el extent completo. Mas rapido; el fondo se controla con mascara/NoData.",
+    )
+    parser.add_argument(
+        "--force-crop-scan",
+        action="store_true",
+        help="Fuerza el barrido completo de pixeles para recortar fisicamente el rectangulo util.",
+    )
     return parser.parse_args()
 
 
@@ -850,13 +863,19 @@ def main() -> int:
     output_layout = args.output_layout
     build_overviews = args.build_overviews
     write_nodata = False
+    skip_bbox_scan = args.skip_bbox_scan
     if args.tpk_compatible:
         write_internal_mask = False
         output_layout = "stripped"
         build_overviews = False
         write_nodata = True
+        skip_bbox_scan = True
+        if args.jpeg_quality == 85:
+            args.jpeg_quality = 75
     if args.no_nodata:
         write_nodata = False
+    if args.force_crop_scan:
+        skip_bbox_scan = False
 
     print(f"Fuentes: {len(jobs)}")
     print(f"Salida: {'directorio unico ' + str(args.output_dir) if args.output_dir else 'subfolder ' + args.output_folder_name + ' junto al origen'}")
@@ -878,6 +897,7 @@ def main() -> int:
             write_internal_mask=write_internal_mask,
             output_layout=output_layout,
             write_nodata=write_nodata,
+            skip_bbox_scan=skip_bbox_scan,
         )
         rows.append(row)
         if row.get("status") == "error":
