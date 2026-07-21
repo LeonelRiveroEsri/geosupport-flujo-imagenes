@@ -377,11 +377,19 @@ def rgb_lookup_from_colormap(src):
     if src.count >= 3:
         return None
 
-    cmap = src.colormap(1)
+    try:
+        cmap = src.colormap(1)
+    except Exception:
+        cmap = {}
     lookup = np.zeros((256, 3), dtype="uint8")
-    for value, color in cmap.items():
-        if 0 <= int(value) <= 255:
-            lookup[int(value), :] = color[:3]
+    if cmap:
+        for value, color in cmap.items():
+            if 0 <= int(value) <= 255:
+                lookup[int(value), :] = color[:3]
+    else:
+        lookup[:, 0] = np.arange(256, dtype="uint8")
+        lookup[:, 1] = np.arange(256, dtype="uint8")
+        lookup[:, 2] = np.arange(256, dtype="uint8")
     return lookup
 
 
@@ -492,7 +500,20 @@ def normalize_streaming(
 
             src_window = Window(col_min, row_min, out_width, out_height)
             profile = src.profile.copy()
-            for key in ["colormap", "photometric", "nodata", "compress", "compression", "predictor", "zlevel", "jpeg_quality"]:
+            for key in [
+                "colormap",
+                "photometric",
+                "nodata",
+                "compress",
+                "compression",
+                "predictor",
+                "zlevel",
+                "jpeg_quality",
+                "interleave",
+                "tiled",
+                "blockxsize",
+                "blockysize",
+            ]:
                 profile.pop(key, None)
 
             compression = compression.lower().strip()
@@ -593,6 +614,7 @@ def normalize_streaming(
                     candidate_profile.update(
                         compress="jpeg",
                         photometric="YCbCr",
+                        interleave="pixel",
                         jpeg_quality=int(quality),
                         JPEGTABLESMODE=3,
                     )
