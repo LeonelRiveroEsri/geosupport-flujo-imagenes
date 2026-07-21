@@ -5,6 +5,7 @@ import csv
 import os
 import shutil
 import sys
+import tempfile
 from collections import Counter
 from pathlib import Path
 
@@ -496,7 +497,8 @@ def normalize_streaming(
             row["output_height"] = str(out_height)
 
             output_path.parent.mkdir(parents=True, exist_ok=True)
-            temp_output = output_path.with_name(f"{output_path.stem}.tmp{output_path.suffix}")
+            temp_dir = Path(tempfile.mkdtemp(prefix=f"{output_path.stem}_", dir=output_path.parent))
+            temp_output = temp_dir / f"{output_path.stem}.tmp{output_path.suffix}"
             if temp_output.exists():
                 temp_output.unlink()
 
@@ -537,16 +539,25 @@ def normalize_streaming(
             )
             if write_nodata:
                 profile.update(nodata=int(masked_fill_value))
-            if output_layout == "tiled":
+            effective_output_layout = output_layout
+            # JPEG en tiras falla con rasters extremadamente anchos porque cada tira
+            # conserva el ancho completo. En esos casos se cambia a tiles manteniendo
+            # NoData y sin mascara interna para conservar compatibilidad de consumo.
+            if compression == "jpeg" and output_layout == "stripped" and max(out_width, out_height) > 65000:
+                effective_output_layout = "tiled"
+            row["output_layout"] = effective_output_layout
+
+            if effective_output_layout == "tiled":
                 profile.update(
                     tiled=True,
                     blockxsize=tile_size,
                     blockysize=tile_size,
                 )
             else:
+                strip_rows = min(32, out_height)
                 profile.update(
                     tiled=False,
-                    blockysize=src.block_shapes[0][0] if src.block_shapes else 32,
+                    blockysize=max(1, strip_rows),
                 )
 
             lookup = rgb_lookup_from_colormap(src) if src.count == 1 else None
@@ -665,7 +676,15 @@ def normalize_streaming(
                 row["jpeg_quality_used"] = "" if best_quality is None else str(best_quality)
 
             cleanup_raster_artifacts(temp_output)
+            shutil.rmtree(temp_dir, ignore_errors=True)
     except Exception as exc:
+        try:
+            if "temp_output" in locals():
+                cleanup_raster_artifacts(temp_output)
+            if "temp_dir" in locals():
+                shutil.rmtree(temp_dir, ignore_errors=True)
+        except Exception:
+            pass
         row["status"] = "error"
         row["error"] = str(exc)
 
@@ -802,7 +821,10 @@ def recursive_tifs(input_dir: Path, output_folder_name: str) -> list[Path]:
             continue
         if path.suffix.lower() not in {".tif", ".tiff"}:
             continue
-        if any(part.lower() == output_key for part in path.parts):
+        relative_parts = [part.lower() for part in path.relative_to(input_dir).parts[:-1]]
+        if any(part == output_key or part.startswith("normalizadas") for part in relative_parts):
+            continue
+        if path.name.lower().endswith(".tmp.tif") or ".tmp" in path.name.lower():
             continue
         paths.append(path)
     return sorted(paths, key=lambda value: str(value).lower())
