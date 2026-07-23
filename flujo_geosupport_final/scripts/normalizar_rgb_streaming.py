@@ -541,9 +541,10 @@ def normalize_streaming(
                 profile.update(nodata=int(masked_fill_value))
             effective_output_layout = output_layout
             # JPEG en tiras falla con rasters extremadamente anchos porque cada tira
-            # conserva el ancho completo. En esos casos se cambia a tiles manteniendo
+            # conserva el ancho completo. El alto no tiene el mismo problema porque
+            # se divide en multiples tiras. En esos casos se cambia a tiles manteniendo
             # NoData y sin mascara interna para conservar compatibilidad de consumo.
-            if compression == "jpeg" and output_layout == "stripped" and max(out_width, out_height) > 65000:
+            if compression == "jpeg" and output_layout == "stripped" and out_width > 65000:
                 effective_output_layout = "tiled"
             row["output_layout"] = effective_output_layout
 
